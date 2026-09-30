@@ -9,3 +9,6 @@ apps/web/.react-router
 .git
 .github
 *.log
+
+**/._*
+**/.DS_Store

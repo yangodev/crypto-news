@@ -37,7 +37,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return adminGet<Models>(request, `/api/admin/models?days=${encodeURIComponent(days)}`);
 }
 
-export const meta: Route.MetaFunction = () => [{ title: `模型与评测 · ${SITE.name} 后台` }];
+export const meta: Route.MetaFunction = () => [{ title: `生成与用量 · ${SITE.name} 后台` }];
 
 const SOURCE_LABEL = { admin: "后台切换", env: "环境变量", default: "代码默认" } as const;
 const secs = (ms: number | null) => (ms == null ? "—" : ms >= 10_000 ? `${Math.round(ms / 1000)} s` : `${(ms / 1000).toFixed(1)} s`);
@@ -50,7 +50,7 @@ export default function ModelsAdmin({ loaderData: m }: Route.ComponentProps) {
 
   return (
     <AdminPage
-      title="模型与评测"
+      title="生成与用量"
       subtitle="每项能力当前用哪个模型、来自哪里（后台切换 > 环境变量 > 代码默认），以及近期的成功率、耗时与费用。切换只影响之后的新任务，已有结果不重算；换精选模型前先看 SelectBench 同批对比。"
       actions={<FilterChips param="days" options={[{ value: "1", label: "24 小时" }, { value: "", label: "7 天" }, { value: "30", label: "30 天" }]} />}
     >

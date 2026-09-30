@@ -4,7 +4,7 @@ FROM node:24-trixie-slim AS base
 WORKDIR /app
 # pg_dump for the optional database backups (Debian's client matches the PostgreSQL 17 server in compose).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends postgresql-client ca-certificates \
+ && apt-get install -y --no-install-recommends postgresql-client ca-certificates fonts-noto-cjk \
  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS build

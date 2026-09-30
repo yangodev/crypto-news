@@ -22,22 +22,24 @@ import { sendProblem } from "../http/respond.ts";
 /** Cookies are Secure whenever the site is served over HTTPS. */
 const secure = () => config.siteUrl.startsWith("https://");
 
-/**
- * Password attempts: at most 10 per client address and 50 in all per 15 minutes. The overall cap holds
- * even when a client forges its address; with a 12+ character password that is far too slow to guess.
- */
-const attempts = new Map<string, number[]>();
-function over(key: string, limit: number, now: number): boolean {
-  const recent = (attempts.get(key) ?? []).filter((t) => now - t < 15 * 60_000);
-  recent.push(now);
-  attempts.set(key, recent);
-  return recent.length > limit;
-}
-function tooManyAttempts(ip: string): boolean {
+// Per-address penalties do not consume a shared long-lived login allowance.
+// The small global queue bounds distributed guesses and memory without a 15-minute global lockout.
+const attempts = new Map<string, { count: number; until: number }>();
+let active = 0;
+const waiting: Array<() => void> = [];
+async function loginSlot(ip: string): Promise<(() => void) | null> {
   const now = Date.now();
-  if (attempts.size > 5000) attempts.clear();
-  const perClient = over(`ip:${ip}`, 10, now);
-  return over("all", 50, now) || perClient;
+  for (const [key, value] of attempts) if (value.until <= now) attempts.delete(key);
+  const entry = attempts.get(ip);
+  if (entry && entry.count >= 10) return null;
+  if (active >= 4 && waiting.length >= 32) return null;
+  if (!entry && attempts.size >= 5000) attempts.delete(attempts.keys().next().value!);
+  attempts.set(ip, { count: (entry?.count ?? 0) + 1, until: entry?.until ?? now + 15 * 60_000 });
+  if (active >= 4) await new Promise<void>((resolve) => waiting.push(resolve));
+  else active++;
+  // Four lanes, at most eight credential checks per second across all addresses.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return () => { const next = waiting.shift(); if (next) next(); else active--; };
 }
 
 const loginPage = (returnTo: string, error?: string) => `/admin/login?${new URLSearchParams({ return: safeReturn(returnTo), ...(error ? { error } : {}) })}`;
@@ -84,15 +86,16 @@ export function registerAdminAuth(app: FastifyInstance) {
     const b = (req.body ?? {}) as Record<string, string>;
     const returnTo = String(b.return ?? "/admin");
     reply.header("Cache-Control", "no-store");
-    if (tooManyAttempts(String(req.ip))) return reply.redirect(loginPage(returnTo, "too-many"), 303);
+    const release = await loginSlot(String(req.ip));
+    if (!release) return reply.redirect(loginPage(returnTo, "too-many"), 303);
     try {
-      const { token, returnTo: target } = await passwordLogin(String(b.password ?? ""), returnTo, req.headers["user-agent"]);
+      const { token, returnTo: target } = await passwordLogin(String(b.username ?? ""), String(b.password ?? ""), returnTo, req.headers["user-agent"]);
       reply.header("Set-Cookie", cookie(SESSION_COOKIE, token, SESSION_DAYS * 86400, secure()));
       return reply.redirect(target, 303);
     } catch (error) {
       if (!(error instanceof LoginRejected)) req.log.error({ err: error }, "admin login failed");
       return reply.redirect(loginPage(returnTo, error instanceof LoginRejected && /ADMIN_PASSWORD/.test(error.message) ? "unset" : "wrong"), 303);
-    }
+    } finally { release(); }
   });
 
   // Optional Feishu sign-in (FEISHU_LOGIN_APP_ID / FEISHU_LOGIN_APP_SECRET and an allowlist).

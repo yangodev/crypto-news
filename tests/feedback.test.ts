@@ -1,6 +1,7 @@
 // Feedback reaches the internal Feishu chat with its screenshot even when Feishu fails at first: a
 // failed upload or send is tried again, only the Feishu image key is kept, a screenshot that cannot be
 // uploaded for a day is dropped (the text still goes), and imported feedback is never forwarded again.
+import sharp from "sharp";
 import { tag } from "./setup.ts";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync } from "node:fs";
@@ -40,7 +41,7 @@ after(async () => {
   await closeDb();
 });
 
-const PNG = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
+const PNG = await sharp({create:{width:2,height:2,channels:4,background:"white"}}).png().toBuffer();
 let n = 0;
 async function submit(): Promise<{ id: number; file: string }> {
   n += 1;

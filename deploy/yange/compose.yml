@@ -1,0 +1,101 @@
+name: yange-crypto-news
+x-backend: &backend
+  image: yange-crypto-news:${RELEASE_TAG:-20260930-19}
+  env_file: .env
+  restart: unless-stopped
+  init: true
+  environment: &backend-env
+    NODE_ENV: production
+    DATABASE_URL: postgres://yange:${POSTGRES_PASSWORD:?required}@db:5432/yange_crypto
+    AIHOT_DATA_DIR: /data
+    API_BASE_URL: http://api:3001
+    LOCAL_ROUTER_URL: http://web:3000
+  volumes:
+    - data:/data
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+  depends_on:
+    db:
+      condition: service_healthy
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.5
+    environment:
+      POSTGRES_USER: yange
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: yange_crypto
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U yange -d yange_crypto']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+  setup:
+    <<: *backend
+    restart: 'no'
+    mem_limit: 384m
+    command: [sh, -c, 'node scripts/migrate.ts && node scripts/seed.ts && node scripts/yange-bootstrap.ts']
+  api:
+    <<: *backend
+    mem_limit: 512m
+    cpus: 0.5
+    command: [node, apps/api/src/main.ts]
+    environment:
+      <<: *backend-env
+      API_HOST: 0.0.0.0
+      API_PORT: '3001'
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  worker:
+    <<: *backend
+    env_file: [.env, square-publish.env]
+    mem_limit: 768m
+    cpus: 0.75
+    stop_grace_period: 240s
+    command: [node, apps/worker/src/main.ts]
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+  web:
+    image: yange-crypto-news:${RELEASE_TAG:-20260930-19}
+    restart: unless-stopped
+    init: true
+    mem_limit: 384m
+    cpus: 0.5
+    environment:
+      NODE_ENV: production
+      SITE_URL: ${SITE_URL:?required}
+      API_BASE_URL: http://api:3001
+      WEB_HOST: 0.0.0.0
+      WEB_PORT: '3000'
+      TRUST_PROXY: 'true'
+      NODE_OPTIONS: --max-old-space-size=256
+    command: [node, apps/web/server.ts]
+    ports:
+      - 127.0.0.1:3080:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/admin/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+volumes:
+  db:
+  data:

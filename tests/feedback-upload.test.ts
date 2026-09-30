@@ -1,4 +1,5 @@
 import "./setup.ts";
+import sharp from "sharp";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -24,8 +25,8 @@ async function upload(file: Buffer, ip: string) {
   return app.inject({ method: "POST", url: "/api/site/feedback", headers: { "content-type": request.headers.get("content-type")!, "x-real-ip": ip }, payload });
 }
 
-test("a 5 MiB multipart screenshot waits intact for forwarding", async () => {
-  const file = Buffer.alloc(5 * 1024 * 1024, 137);
+test("a multipart screenshot is decoded and normalized before storage", async () => {
+  const file = await sharp({create:{width:32,height:32,channels:3,background:"red"}}).png().toBuffer();
   const result = await upload(file, "203.0.113.211");
   assert.equal(result.statusCode, 201, result.body);
   assert.equal(result.headers["cache-control"], "no-store");
@@ -34,7 +35,7 @@ test("a 5 MiB multipart screenshot waits intact for forwarding", async () => {
   assert.equal(row!.email, "reader@example.com");
   assert.equal(row!.page_url, "/daily");
   assert.equal(row!.forward_error, "pending");
-  assert.deepEqual(await readFile(path.join(config.dataDir, "feedback-screenshots", row!.screenshot_key.slice(6))), file);
+  assert.equal((await sharp(await readFile(path.join(config.dataDir, "feedback-screenshots", row!.screenshot_key.slice(6)))).metadata()).format, "webp");
 });
 
 test("malformed multipart and screenshots above the existing backend limit are rejected", async () => {
@@ -46,9 +47,9 @@ test("malformed multipart and screenshots above the existing backend limit are r
 });
 
 test("the JSON screenshot sent by an already-open tab remains accepted", async () => {
-  const file = Buffer.from("existing screenshot");
+  const file = await sharp({create:{width:32,height:32,channels:3,background:"blue"}}).png().toBuffer();
   const result = await app.inject({ method: "POST", url: "/api/site/feedback", headers: { "x-real-ip": "203.0.113.213" }, payload: { content: "旧标签页", screenshot: { mime: "image/png", data: file.toString("base64") } } });
   assert.equal(result.statusCode, 201);
   const [row] = await sql`SELECT screenshot_key FROM feedback WHERE id = ${result.json().id}`;
-  assert.deepEqual(await readFile(path.join(config.dataDir, "feedback-screenshots", row!.screenshot_key.slice(6))), file);
+  assert.equal((await sharp(await readFile(path.join(config.dataDir, "feedback-screenshots", row!.screenshot_key.slice(6)))).metadata()).format, "webp");
 });

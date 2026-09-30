@@ -1,3 +1,8 @@
+import { reviewAutomaticDrafts } from '@aihot/backend/square/auto';
+import { shutdownSignal } from '@aihot/backend/jobs/queue';
+import { generateSquareImages } from '@aihot/backend/square/images';
+import { generateSquareDrafts } from "@aihot/backend/square/drafts";
+import { deliverSquareDrafts } from "@aihot/backend/square/deliver";
 // Cron-style schedules (Asia/Shanghai). Each run is recorded in job_runs; missed slots run once.
 import type { PgBoss } from "pg-boss";
 import { FEATURES } from "@aihot/industry/features";
@@ -36,6 +41,10 @@ interface Scheduled {
 const collecting = process.env.COLLECT_ENABLED !== "false";
 
 export const SCHEDULES: Scheduled[] = [
+  { name: "square.images", cron: "* * * * *", run: generateSquareImages },
+  { name: "square.drafts", cron: "* * * * *", run: generateSquareDrafts },
+  { name: "square.review", cron: "* * * * *", run: reviewAutomaticDrafts },
+  { name: "square.deliver", cron: "* * * * *", run: deliverSquareDrafts },
   { name: "content.sweep", cron: "*/5 * * * *", run: sweepUnprocessed },
   // Full-text translations of newly selected items (model calls; off with MODEL_CALLS_ENABLED=false).
   { name: "content.translate", cron: "*/5 * * * *", run: () => translatePending() },
@@ -81,7 +90,7 @@ export const SCHEDULES: Scheduled[] = [
   ...(collecting
     ? [
         { name: "sources.schedule", cron: "* * * * *", run: () => scheduleDueSources() },
-        { name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals },
+        ...(process.env.SOURCE_ADAPT_ENABLED === "true" ? [{ name: "sources.adapt-intervals", cron: "20 4 * * *", run: adaptIntervals }] : []),
         // WeChat official accounts (paid), each once per its interval.
         { name: "sources.mp-reconcile", cron: "*/15 * * * *", run: () => scheduleMpReconcile() },
       ]
@@ -102,7 +111,11 @@ export async function registerSchedules(boss: PgBoss) {
     await ensureQueue(queue, { policy: "singleton", retryLimit: 1, expireInSeconds: 3600 });
     await boss.schedule(queue, s.cron, {}, { tz: "Asia/Shanghai", missed: s.missed ?? "skip" });
     // Schedules fire at minute boundaries; a 15 s pickup keeps them on time with a third of the polling.
-    await boss.work(queue, { pollingIntervalSeconds: 15 }, async () => recordRun(s.name, s.run));
+    await boss.work(queue, { pollingIntervalSeconds: 15 }, async () => recordRun(s.name, () => {
+      if(process.env.REALTIME_NEWS_ONLY==='true' && ['content.translate','reports.daily','reports.weekly','reports.monthly','reports.catch-up'].includes(s.name))return Promise.resolve({disabled:true,reason:'实时试运行：额度优先用于新闻分析与候选稿'});
+      if(shutdownSignal.signal.aborted)return Promise.resolve({stopped:true});
+      return s.run();
+    }));
   }
   // A schedule removed from the table (a module switched off) must not keep firing from an earlier run.
   const names = new Set(SCHEDULES.map((s) => `cron.${s.name}`));

@@ -6,7 +6,7 @@
 // the canvas, and `focus` lights one of them. On first sight the river flows in from the left once.
 // Theme-aware, paused off screen; reduced motion draws it still. The canvas only illustrates: what it
 // says is also written in the page.
-import { SITE, withSubject } from "@aihot/industry/site";
+import { SITE } from "@aihot/industry/site";
 import { useEffect, useRef, type ReactNode } from "react";
 import { shortSourceName } from "../../lib/format";
 
@@ -482,7 +482,7 @@ export function SignalRiver({
       const p = L.paper;
       if (x >= p.x - 8 && x <= p.x + p.w + 8 && y >= p.y - 8 && y <= p.y + p.h + 8) {
         hover = { s: null, bundle: null, paper: true };
-        place(x, y, withSubject("日报"), "每天 08:00 出刊");
+        place(x, y, "加密市场精选", "追踪重要进展与原始来源");
         redraw();
         return;
       }

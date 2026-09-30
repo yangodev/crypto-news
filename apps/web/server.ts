@@ -91,6 +91,13 @@ function pageCache(req: import("node:http").IncomingMessage, res: import("node:h
   res.writeHead = ((status: number, messageOrHeaders?: string | import("node:http").OutgoingHttpHeaders, headers?: import("node:http").OutgoingHttpHeaders) => {
     const outgoing = typeof messageOrHeaders === "string" ? headers : messageOrHeaders;
     for (const [name, value] of Object.entries(outgoing ?? {})) if (value !== undefined) res.setHeader(name, value);
+    // Single-fetch payloads are text streams, not downloadable scripts. Some browser download
+    // handlers intercept text/x-script; the router decodes the body independently of its MIME type.
+    if (url.pathname.endsWith(".data") && /^text\/x-script(?:;|$)/i.test(String(res.getHeader("Content-Type") ?? ""))) {
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", "inline");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+    }
     const cc = String(res.getHeader("Cache-Control") ?? "");
     if (!publicRead || status !== 200 || res.hasHeader("Set-Cookie") || !cc || /(?:private|no-store)/i.test(cc)) {
       res.removeHeader("Expires");
@@ -119,6 +126,12 @@ function pageCache(req: import("node:http").IncomingMessage, res: import("node:h
 
 async function handle(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
   const raw = req.url ?? "/";
+  // This localhost-only origin receives the public scheme from Cloudflare Tunnel.
+  const site = process.env.SITE_URL?.replace(/\/+$/, "");
+  if (TRUST_PROXY && site?.startsWith("https://") && req.headers["x-forwarded-proto"] === "http") {
+    res.writeHead(308, { Location: site + (raw.startsWith("/") ? raw : "/"), "Cache-Control": "no-store" });
+    return res.end();
+  }
   const qi = raw.indexOf("?");
   const pathname = qi >= 0 ? raw.slice(0, qi) : raw;
   const search = qi >= 0 ? raw.slice(qi) : "";

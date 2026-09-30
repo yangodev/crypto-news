@@ -141,12 +141,16 @@ export async function completeLogin(code: string, state: string, stateCookie: st
 const PASSWORD_ADMIN = "admin@local";
 
 /** Password sign-in: a constant-time comparison of digests, so the length leaks nothing either. */
-export async function passwordLogin(password: string, returnTo: string, userAgent: string | undefined) {
+export async function passwordLogin(username: string, password: string, returnTo: string, userAgent: string | undefined) {
   const expected = config.adminPassword;
   if (!expected || expected.length < 12) throw new LoginRejected("还没有设置管理员密码（环境变量 ADMIN_PASSWORD，至少 12 位）");
   const given = createHmac("sha256", "admin-password").update(password).digest();
   const wanted = createHmac("sha256", "admin-password").update(expected).digest();
-  if (!timingSafeEqual(given, wanted)) throw new LoginRejected("密码不对");
+  const givenUser = createHmac("sha256", "admin-username").update(username).digest();
+  const wantedUser = createHmac("sha256", "admin-username").update(config.adminUsername).digest();
+  const passwordMatches = timingSafeEqual(given, wanted);
+  const usernameMatches = timingSafeEqual(givenUser, wantedUser);
+  if (!passwordMatches || !usernameMatches) throw new LoginRejected("用户名或密码不正确");
   const [user] = await sql<{ id: number }[]>`
     INSERT INTO admin_users (email, display_name, last_login_at) VALUES (${PASSWORD_ADMIN}, '管理员', now())
     ON CONFLICT (email) DO UPDATE SET last_login_at = now() RETURNING id`;

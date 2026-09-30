@@ -1,7 +1,11 @@
+import { createHash } from "node:crypto";
+import { draftCover } from "@aihot/backend/square/cover";
 // /api/admin/*: queries are GET, creation POST, edits PATCH, business commands POST.
 // Every route goes through adminHandler (session + CSRF); manual changes are audited in the modules.
 import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { squareOverview } from "@aihot/backend/square/drafts";
+import { audit } from "@aihot/backend/admin/auth";
 import { actorOf } from "@aihot/backend/admin/auth";
 
 import { importSelectBenchRun, listSelectBenchRuns, selectBenchRun } from "@aihot/backend/admin/selectbench";
@@ -33,6 +37,16 @@ function decodeImage(dataUrl: unknown): Buffer {
 }
 
 export function registerAdmin(app: FastifyInstance) {
+  app.get("/api/admin/square/:id/cover", adminHandler(async (req,reply) => {
+    const cover=await draftCover(Number(param(req,"id")));
+    return cover ? reply.header("X-Cover-SHA256",createHash("sha256").update(cover).digest("hex")).type("image/png").send(cover) : notFound(req,reply);
+  }));
+  app.get("/api/admin/square", adminHandler(async () => squareOverview()));
+  app.post("/api/admin/square/pause", adminHandler(async (_req, _reply, admin) => {
+    await sql`UPDATE square_control SET paused=true,updated_at=now() WHERE id=true`;
+    await audit(actorOf(admin),"square.pause","square",null,null,{paused:true});
+    return {paused:true};
+  }));
   // Sources (F18)
   app.get("/api/admin/sources", adminHandler(async (req) => {
     const f = q(req);

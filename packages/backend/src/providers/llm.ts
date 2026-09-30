@@ -1,3 +1,4 @@
+import { parseCompletionStream } from "./stream.ts";
 // OpenAI-compatible chat calls, always through receipts. One model is enough: `default` is whatever the
 // deployment names in LLM_BASE_URL / LLM_API_KEY / LLM_MODEL, and every capability uses it unless an
 // environment variable or the admin's model page picks one of the named presets below.
@@ -207,7 +208,7 @@ export async function chatJson<S extends z.ZodType>(opts: ChatJsonOptions<S>): P
       }
       let json: Record<string, unknown>;
       try {
-        json = JSON.parse(text);
+        json = res.headers.get("content-type")?.includes("text/event-stream") ? parseCompletionStream(text) : JSON.parse(text);
       } catch {
         json = { unparsable: text.slice(0, 20000) };
       }

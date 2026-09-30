@@ -1,3 +1,4 @@
+import { archiveOutsideRealtime } from '../content/realtime.ts';
 // Content processing: body extraction when the source needs it → analysis → publish → event grouping.
 // Every article reaches the queues through queueProcessing, which records when it was queued, so the
 // safety net only picks up articles nothing is working on and sends those still waiting for a body to
@@ -66,6 +67,7 @@ const PRIORITY = { live: 0, liveSignal: -1, history: -2 } as const;
  */
 export async function queueProcessing(articleId: string, opts: { step?: Step; attemptTag?: string; db?: Db } = {}): Promise<string | null> {
   const db = opts.db ?? sql;
+  if (!opts.attemptTag && await archiveOutsideRealtime(articleId,db)) return null;
   const r = await route(articleId, db);
   if (!r) return null;
   const step = opts.step ?? r.step;
@@ -98,6 +100,7 @@ export async function processArticle(articleId: string, opts: { attemptTag?: str
   const [found] = await sql<{ participation_mode: string; processing_state: string; revision: number; backfill: boolean; published_at: Date | null; discovered_at: Date }[]>`
     SELECT s.participation_mode, a.processing_state, a.revision, a.backfill, a.published_at, a.discovered_at FROM articles a JOIN sources s ON s.id = a.source_id WHERE a.id = ${articleId}`;
   if (!found) return { state: "missing" };
+  if (!opts.attemptTag && await archiveOutsideRealtime(articleId)) return {state:"archived"};
   const row = { ...found, historical: isHistorical(found) };
   if (row.participation_mode !== "editorial") {
     // Normally queued straight for grouping (queueProcessing); an explicit re-evaluation lands here.
@@ -184,6 +187,7 @@ export async function registerExtractionJobs(boss: PgBoss) {
     if (!job) return;
     const { articleId } = job.data;
     try {
+      if (await archiveOutsideRealtime(articleId)) return {state:"archived"};
       const state = await extractArticleBody(articleId);
       await queueProcessing(articleId, { step: "analyze" });
       return { state };

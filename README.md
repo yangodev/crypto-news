@@ -1,3 +1,9 @@
+# 岩歌快讯
+
+岩歌投研的加密新闻采集、筛选、网站展示与币安广场图文发布服务。此项目基于 [AIHOT](https://github.com/KKKKhazix/AIHOT) 的 `589f79e` 版本开发；下方保留上游原始说明，项目实际配置以 `industry/` 为准。
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
@@ -117,7 +123,7 @@ node scripts/init-env.ts --llm-key <你的模型 API Key>
 docker compose up -d --build
 ```
 
-打开 <http://localhost:3000>。后台在 `/admin`，管理员密码在 `.env` 的 `ADMIN_PASSWORD` 里。一两分钟后开始有内容，第一次导入的资料大约半小时处理完。
+打开 <http://localhost:3000>。后台在 `/admin`，管理员用户名默认 `admin`（可通过 `.env` 的 `ADMIN_USERNAME` 修改），密码在 `ADMIN_PASSWORD` 里。一两分钟后开始有内容，第一次导入的资料大约半小时处理完。
 
 机器上没有 Node、服务器在中国大陆、要配域名和 HTTPS，见 [部署](docs/deploy.md)。
 

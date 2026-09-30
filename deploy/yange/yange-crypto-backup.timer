@@ -1,0 +1,7 @@
+[Unit]
+Description=Daily Yange Crypto database backup
+[Timer]
+OnCalendar=*-*-* 20:10:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

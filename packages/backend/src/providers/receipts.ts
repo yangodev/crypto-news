@@ -81,7 +81,7 @@ interface ReceiptRow {
   updated_at: Date;
 }
 
-async function checkBudget(tx: Db, service: string): Promise<void> {
+async function checkBudget(tx: Db, service: string, purpose: string): Promise<void> {
   const [budget] = await tx<{ per_minute: number; per_hour: number; per_day: number }[]>`
     SELECT per_minute, per_hour, per_day FROM budgets WHERE service = ${service}`;
   if (!budget) return; // default rows come with the migrations; a service an operator removed is unlimited
@@ -96,6 +96,12 @@ async function checkBudget(tx: Db, service: string): Promise<void> {
   const c = counts!;
   if (budget.per_minute <= 0 || budget.per_hour <= 0 || budget.per_day <= 0) {
     throw new BudgetExceededError(service, "stopped", 3600);
+  }
+  // Reserve capacity for finishing review drafts instead of spending the entire budget on discovery.
+  if(service==='llm' && process.env.REALTIME_NEWS_ONLY==='true' && purpose!=='square.draft'){
+    if(c.minute >= Math.max(0,budget.per_minute-1))throw new BudgetExceededError(service,'minute reserved for drafts',60);
+    if(c.hour >= Math.max(0,budget.per_hour-10))throw new BudgetExceededError(service,'hour reserved for drafts',600);
+    if(c.day >= Math.max(0,budget.per_day-20))throw new BudgetExceededError(service,'day reserved for drafts',3600);
   }
   if (c.minute >= budget.per_minute) throw new BudgetExceededError(service, "minute", 60);
   if (c.hour >= budget.per_hour) throw new BudgetExceededError(service, "hour", 600);
@@ -123,13 +129,13 @@ export async function paidRequest(req: ReceiptRequest, call: () => Promise<CallO
       }
       if (existing.status === "unknown") return { kind: "unknown" as const, row: existing };
       // failed: the provider did not take the request, or its answer was unusable; a new attempt is allowed.
-      await checkBudget(tx, req.service);
+      await checkBudget(tx, req.service, req.purpose);
       const [r] = await tx<{ attempts: number }[]>`
         UPDATE receipts SET status = 'pending', attempts = attempts + 1, error = NULL, updated_at = now() WHERE id = ${existing.id} RETURNING attempts`;
       const attemptId = await startAttempt(tx, existing.id, r!.attempts, req);
       return { kind: "call" as const, id: existing.id, attemptId };
     }
-    await checkBudget(tx, req.service);
+    await checkBudget(tx, req.service, req.purpose);
     const [row] = await tx<{ id: number }[]>`
       INSERT INTO receipts (logical_key, service, model, purpose, subject, status, request, attempts)
       VALUES (${logicalKey}, ${req.service}, ${req.model ?? null}, ${req.purpose}, ${req.subject ?? null}, 'pending',

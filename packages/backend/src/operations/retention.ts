@@ -35,5 +35,8 @@ export async function dailyRetention(now = new Date()) {
   for (const f of files) await unlink(path.join(config.dataDir, f.key)).catch(() => {});
   const monthMs = 30 * 86400_000;
   const prunedCache = (await pruneCache(path.join(config.dataDir, "imgcache"), monthMs, now.getTime())) + (await pruneCache(path.join(config.dataDir, "ogcache"), monthMs, now.getTime()));
-  return { deletedLeases: leases.count, deletedJobRuns: runs.count, deletedFiles: files.length, prunedCache };
+  // Screenshot lifetime does not depend on optional forwarding being enabled.
+  const prunedFeedback = await pruneCache(path.join(config.dataDir, "feedback-screenshots"), monthMs, now.getTime());
+  await sql`UPDATE feedback SET screenshot_key=NULL WHERE screenshot_key LIKE 'local:%' AND created_at < ${new Date(now.getTime()-monthMs)}`;
+  return { prunedFeedback, deletedLeases: leases.count, deletedJobRuns: runs.count, deletedFiles: files.length, prunedCache };
 }

@@ -8,7 +8,7 @@ import { Wordmark } from "../components/Logo";
 import { buttonClass } from "../components/ui/Controls";
 
 const ERRORS: Record<string, string> = {
-  wrong: "密码不对，再试一次。",
+  wrong: "用户名或密码不正确，请重试。",
   unset: "还没有设置管理员密码：在 .env 里设置 ADMIN_PASSWORD（至少 12 位），重启后再登录。",
   "too-many": "尝试次数太多，请 15 分钟后再试。",
 };
@@ -36,6 +36,16 @@ export default function AdminLogin() {
         </div>
         <form method="post" action="/api/auth/password" className="card mt-8 p-6">
           <input type="hidden" name="return" value={returnTo} />
+          <label htmlFor="username" className="block text-[13px] font-medium text-ink-2">用户名</label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            required
+            autoFocus
+            className="mb-4 mt-2 h-10 w-full rounded-full border border-line-strong bg-surface px-4 text-[14px] text-ink outline-none transition-colors focus:border-accent"
+          />
           <label htmlFor="password" className="block text-[13px] font-medium text-ink-2">
             管理员密码
           </label>
@@ -45,7 +55,6 @@ export default function AdminLogin() {
             type="password"
             autoComplete="current-password"
             required
-            autoFocus
             className="mt-2 h-10 w-full rounded-full border border-line-strong bg-surface px-4 text-[14px] text-ink outline-none transition-colors focus:border-accent"
           />
           {message && (

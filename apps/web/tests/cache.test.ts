@@ -220,3 +220,19 @@ test("a visitor cannot name its own address to the api without a trusted proxy i
   const res = await fetch(`${origin}/api/site/echo-client`, { headers: { "X-Forwarded-For": "6.6.6.6", "X-Real-IP": "6.6.6.6" } });
   assert.deepEqual(await res.json(), { forwarded: "127.0.0.1", real: "127.0.0.1" });
 });
+
+// Exercise the production adapter, including redirects/errors and private route data.
+test("route data stays inline text while documents stay HTML", async () => {
+  for (const path of ["/about.data", "/admin/sources.data?_routes=admin-layout", "/does-not-exist.data", "/story/merged.data"]) {
+    const res = await fetch(origin + path, { redirect: "manual" });
+    assert.equal(res.headers.get("Content-Type"), "text/plain; charset=utf-8", path);
+    assert.equal(res.headers.get("Content-Disposition"), "inline", path);
+    assert.equal(res.headers.get("X-Content-Type-Options"), "nosniff", path);
+    assert.ok((await res.text()).length > 0, path);
+    if (path.startsWith("/admin")) assert.match(res.headers.get("Cache-Control")!, /no-store/);
+  }
+  const page = await fetch(origin + "/about");
+  assert.match(page.headers.get("Content-Type")!, /text\/html/);
+  assert.equal(page.headers.get("Content-Disposition"), null);
+  await page.arrayBuffer();
+});

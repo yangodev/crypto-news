@@ -1,3 +1,4 @@
+import { credential } from '../config.ts';
 // Article body extraction: readable text from the article page, or "unconfirmed" — never a wrong body.
 // Jina Reader is the budgeted fallback for pages that only render in a browser.
 import { Readability } from "@mozilla/readability";
@@ -79,7 +80,7 @@ export async function extractFromUrl(url: string, opts: { allowJina: boolean; su
   } catch {
     // fall through to Jina
   }
-  if (!opts.allowJina) return null;
+  if (!opts.allowJina || !credential("collectors", "JINA_API_KEY")) return null;
   try {
     const page = await jinaRead(url, { purpose: "body_fallback", subject: opts.subject });
     const html = trimTrailingChrome(sanitizeBody(markdownToHtml(page.markdown), url));
