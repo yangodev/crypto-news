@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
-cd /opt/yange-crypto-news
+cd /opt/yango-crypto-news
 mkdir -p backups
 chmod 700 backups
 exec 9>backups/.lock
@@ -16,7 +16,7 @@ consistent=false
 for attempt in 1 2 3; do
   manifest > "$stage/data-manifest.json"
   sudo -n docker compose exec -T api tar -C /data --exclude=./imgcache --exclude=./ogcache -czf - . > "$stage/data.tar.gz"
-  sudo -n docker compose exec -T db pg_dump -U yange yange_crypto | gzip > "$stage/db.sql.gz"
+  sudo -n docker compose exec -T db pg_dump -U yango yango_crypto | gzip > "$stage/db.sql.gz"
   manifest > "$stage/after.json"
   if cmp -s "$stage/data-manifest.json" "$stage/after.json"; then consistent=true; break; fi
  done

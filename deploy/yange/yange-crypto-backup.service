@@ -1,7 +1,0 @@
-[Unit]
-Description=Yange Crypto database, files and configuration backup
-[Service]
-Type=oneshot
-User=linuxuser
-WorkingDirectory=/opt/yange-crypto-news
-ExecStart=/bin/bash /opt/yange-crypto-news/backup.sh

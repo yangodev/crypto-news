@@ -1,0 +1,7 @@
+[Unit]
+Description=Yango Crypto database, files and configuration backup
+[Service]
+Type=oneshot
+User=linuxuser
+WorkingDirectory=/opt/yango-crypto-news
+ExecStart=/bin/bash /opt/yango-crypto-news/backup.sh

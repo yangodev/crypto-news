@@ -21,10 +21,10 @@ export const SITE = {
   /** 默认域名，只在没设置 SITE_URL 时使用。 */
   defaultUrl: "http://localhost:3000",
   /**
-   * MCP 工具名的前缀（小写字母、数字、下划线），工具会叫 yange_crypto_get_latest、yange_crypto_search……
+   * MCP 工具名的前缀（小写字母、数字、下划线），工具会叫 yango_crypto_get_latest、yango_crypto_search……
    * 已经有人接入后就不要再改。
    */
-  mcpPrefix: "yange_crypto",
+  mcpPrefix: "yango_crypto",
   /** 对外联系邮箱（选填）：使用规则、llms.txt、响应头里会写。 */
   contactEmail: null as string | null,
   /** 页脚的一行小字（选填）。 */
@@ -38,7 +38,7 @@ export const SITE = {
     founder: null as null | { name: string; url?: string; description?: string },
   },
   /** 抓取信源时报上的名字（User-Agent 里用），不要冒用别的站。 */
-  crawlerName: "YangeResearchBot",
+  crawlerName: "YangoResearchBot",
 } as const;
 
 /** 关于页的文案。数字（信源数、收录数、精选数、日报期数）来自站内实时统计，不用写在这里。 */

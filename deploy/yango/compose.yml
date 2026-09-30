@@ -1,12 +1,12 @@
-name: yange-crypto-news
+name: yango-crypto-news
 x-backend: &backend
-  image: yange-crypto-news:${RELEASE_TAG:-20260930-19}
+  image: yango-crypto-news:${RELEASE_TAG:-20260930-20}
   env_file: .env
   restart: unless-stopped
   init: true
   environment: &backend-env
     NODE_ENV: production
-    DATABASE_URL: postgres://yange:${POSTGRES_PASSWORD:?required}@db:5432/yange_crypto
+    DATABASE_URL: postgres://yango:${POSTGRES_PASSWORD:?required}@db:5432/yango_crypto
     AIHOT_DATA_DIR: /data
     API_BASE_URL: http://api:3001
     LOCAL_ROUTER_URL: http://web:3000
@@ -27,13 +27,13 @@ services:
     mem_limit: 512m
     cpus: 0.5
     environment:
-      POSTGRES_USER: yange
+      POSTGRES_USER: yango
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
-      POSTGRES_DB: yange_crypto
+      POSTGRES_DB: yango_crypto
     volumes:
       - db:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD-SHELL, 'pg_isready -U yange -d yange_crypto']
+      test: [CMD-SHELL, 'pg_isready -U yango -d yango_crypto']
       interval: 10s
       timeout: 5s
       retries: 12
@@ -42,7 +42,7 @@ services:
     <<: *backend
     restart: 'no'
     mem_limit: 384m
-    command: [sh, -c, 'node scripts/migrate.ts && node scripts/seed.ts && node scripts/yange-bootstrap.ts']
+    command: [sh, -c, 'node scripts/migrate.ts && node scripts/seed.ts && node scripts/yango-bootstrap.ts']
   api:
     <<: *backend
     mem_limit: 512m
@@ -71,7 +71,7 @@ services:
       setup:
         condition: service_completed_successfully
   web:
-    image: yange-crypto-news:${RELEASE_TAG:-20260930-19}
+    image: yango-crypto-news:${RELEASE_TAG:-20260930-20}
     restart: unless-stopped
     init: true
     mem_limit: 384m

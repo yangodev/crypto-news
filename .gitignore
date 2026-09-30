@@ -16,5 +16,5 @@ package/
 fontsource-noto-sans-sc-*.tgz
 
 # Local deployment reviews and source probes include operational details.
-/deploy/yange/*.md
-/deploy/yange/source-*.json
+/deploy/yango/*.md
+/deploy/yango/source-*.json
