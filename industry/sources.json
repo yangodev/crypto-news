@@ -9,7 +9,10 @@
         "feedUrl": "https://www.federalreserve.gov/feeds/press_monetary.xml",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://www.federalreserve.gov/newsevents/pressreleases"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -31,7 +34,10 @@
         "feedUrl": "https://www.federalreserve.gov/feeds/press_all.xml",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://www.federalreserve.gov/newsevents/speech"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -75,7 +81,10 @@
         "feedUrl": "https://www.sec.gov/news/pressreleases.rss",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://www.sec.gov/newsroom/press-releases"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -97,7 +106,10 @@
         "feedUrl": "https://blog.ethereum.org/feed.xml",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://blog.ethereum.org"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -119,7 +131,10 @@
         "feedUrl": "https://bitcoincore.org/en/rss.xml",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://bitcoincore.org/en/releases"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -163,7 +178,10 @@
         "feedUrl": "https://blog.chain.link/rss/",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://blog.chain.link"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -537,7 +555,10 @@
         "feedUrl": "https://blog.sui.io/rss/",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://blog.sui.io"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -581,7 +602,10 @@
         "feedUrl": "https://tether.io/feed/",
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://tether.io/news"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -767,7 +791,10 @@
         },
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://ripple.com/insights"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -799,7 +826,10 @@
         },
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://ondo.finance/blog"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -985,7 +1015,10 @@
         },
         "_aihot": {
           "initialBackfillLimit": 3
-        }
+        },
+        "evidenceUrlPrefixes": [
+          "https://www.bnbchain.org/en/blog"
+        ]
       },
       "tier": "T1",
       "first_party": true,
@@ -1014,6 +1047,87 @@
       "owner_entity_id": null,
       "participation_mode": "editorial",
       "interval_minutes": 15,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "crypto-hyperliquid-announcements",
+      "name": "Hyperliquid 官方公告",
+      "kind": "web_list",
+      "config": {
+        "url": "https://t.me/s/hyperliquid_announcements",
+        "adapter": "telegram_channel",
+        "_aihot": {
+          "initialBackfillLimit": 3
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 5,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "crypto-chutes",
+      "name": "Chutes 子网业务公告",
+      "kind": "rss",
+      "config": {
+        "feedUrl": "https://chutes.ai/news/rss.xml",
+        "evidenceUrlPrefixes": [
+          "https://chutes.ai/news"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 3
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 15,
+      "tags": [
+        "官方"
+      ],
+      "site_fulltext": false,
+      "syndicate_fulltext": false,
+      "enabled": true
+    },
+    {
+      "id": "crypto-binance-listings",
+      "name": "币安上新公告",
+      "kind": "json_list",
+      "config": {
+        "url": "https://www.binance.com/bapi/composite/v1/public/cms/article/list/query?type=1&pageNo=1&pageSize=10&catalogId=48",
+        "itemsPath": "data.catalogs.0.articles",
+        "titlePaths": [
+          "title"
+        ],
+        "publishedAtPath": "releaseDate",
+        "publishedAtUnit": "epoch_ms",
+        "urlTemplate": "https://www.binance.com/en/support/announcement/detail/{code}",
+        "externalIdPath": "code",
+        "evidenceUrlPrefixes": [
+          "https://www.binance.com/en/support/announcement/detail"
+        ],
+        "_aihot": {
+          "initialBackfillLimit": 3
+        }
+      },
+      "tier": "T1",
+      "first_party": true,
+      "owner_entity_id": null,
+      "participation_mode": "editorial",
+      "interval_minutes": 5,
       "tags": [
         "官方"
       ],

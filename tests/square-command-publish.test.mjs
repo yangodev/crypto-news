@@ -1,0 +1,55 @@
+import {tag} from './setup.ts';
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {sql,closeDb} from '../packages/backend/src/db.ts';
+import {upsertMaterial} from '../packages/backend/src/content/materials.ts';
+import {digest} from '../packages/backend/src/square/policy.ts';
+import {coverKey,renderCover} from '../packages/backend/src/square/cover.ts';
+import {manualPreview} from '../packages/backend/src/square/manual.ts';
+import {requestSquareCommand} from '../packages/backend/src/square/commands.ts';
+import {publishApprovedDraft} from '../scripts/square/manual.mjs';
+import {buildApp} from '../apps/api/src/app.ts';
+const source='operations-'+tag();let draftId;
+after(async()=>{await sql`DELETE FROM square_commands WHERE actor='operations-test'`;if(draftId)await sql`DELETE FROM square_drafts WHERE id=${draftId}`;await sql`UPDATE square_control SET paused=true`;await closeDb();});
+test('private preview and commands require admin authentication',async()=>{
+ const app=await buildApp();try{
+ assert.equal((await app.inject({method:'GET',url:'/api/admin/square/1/preview'})).statusCode,401);
+ assert.equal((await app.inject({method:'POST',url:'/api/admin/square/commands',payload:{kind:'publish',subject:'1'}})).statusCode,401);
+ }finally{await app.close();}
+});
+test('manual publication requires exact review, honors pause and caps, and stops uncertain outcomes',async()=>{
+ process.env.SQUARE_PUBLISH_ENABLED='true';
+ await sql`INSERT INTO sources(id,name,kind,tier,first_party) VALUES(${source},'官方测试','rss','T1',true)`;
+ const time=new Date(Date.now()-10000),material='The upgrade was executed. Here are the complete official details of the protocol change.';
+ const {articleId}=await upsertMaterial({sourceId:source,url:'https://example.com/'+source,title:'升级',bodyText:material,bodyStatus:'ok',publishedAt:time,via:'fetch'});
+ await sql`INSERT INTO publications(article_id,eligible,selected,title,summary,source_id,channel,first_party,url,published_at,discovered_at,timeline_at,sort_at) VALUES(${articleId},true,true,'升级','已完成',${source},'news',true,${'https://example.com/'+source},${time},${time},${time},${time})`;
+ const [a]=await sql`SELECT revision FROM articles WHERE id=${articleId}`;
+ const title='协议完成升级',body=title+'\n协议公告确认升级已经执行。',evidence={material,quote:'The upgrade was executed.',sourceName:'官方测试',publishedAt:time.toISOString(),stage:'executed'};
+ const [d]=await sql`INSERT INTO square_drafts(event_key,article_id,article_revision,title,body,content_hash,evidence,expires_at) VALUES(${source},${articleId},${a.revision},${title},${body},${digest(body)},${sql.json(evidence)},${new Date(Date.now()+600000)}) RETURNING id`;
+ draftId=Number(d.id);const key=coverKey(draftId,title,evidence);await renderCover(key+'-ai',title,'官方测试',time.toISOString());
+ await sql`UPDATE square_drafts SET cover_status='generated',cover_key=${key} WHERE id=${draftId}`;
+ const p=await manualPreview(draftId);const payload={snapshot:p.snapshot,contentHash:p.contentHash,coverHash:p.coverHash,confirmed:true,acceptStale:false,reason:'已核验事实与配图'};
+ const request={kind:'publish',subject:String(draftId),payload};
+ await sql`UPDATE square_control SET paused=true`;
+ await assert.rejects(requestSquareCommand(request,'operations-test','command-test-1'),/暂停/);
+ await sql`UPDATE square_control SET paused=false,hourly_limit=1,daily_limit=5`;
+ await assert.rejects(requestSquareCommand({...request,payload:{...payload,snapshot:'0'.repeat(64)}},'operations-test','command-test-1'),/变化/);
+ const results=await Promise.all([requestSquareCommand(request,'operations-test','command-test-1'),requestSquareCommand(request,'operations-test','command-test-1')]);assert.equal(results[0].id,results[1].id);
+ await assert.rejects(requestSquareCommand({...request,payload:{...payload,reason:'另一份核验结果'}},'operations-test','command-test-1'),/其他操作/);
+ const approval={id:draftId,hash:p.contentHash,coverHash:p.coverHash,snapshot:p.snapshot,operator:'operations-test',key:'mock',enforceRuntime:true};let posts=0,uploads=0;
+ const transport={uploadImage:async()=>{uploads++;return 'https://example.com/i'},publish:async()=>{posts++;return {id:'9900',shareLink:'https://www.binance.com/square/post/9900'}}};
+ await sql`UPDATE square_control SET paused=true`;
+ await assert.rejects(publishApprovedDraft(approval,transport),/paused/);assert.equal(uploads,0);
+ await sql`UPDATE square_control SET paused=false`;
+ await sql`UPDATE square_drafts SET attempted_at=now() WHERE id=${draftId}`;
+ await assert.rejects(publishApprovedDraft(approval,transport),/limit/);assert.equal(uploads,0);
+ await sql`UPDATE square_drafts SET attempted_at=NULL WHERE id=${draftId}`;
+ await assert.rejects(publishApprovedDraft({...approval,snapshot:'0'.repeat(64)},transport),/changed/);assert.equal(uploads,0);
+ await assert.rejects(publishApprovedDraft(approval,{...transport,uploadImage:async()=>{await sql`UPDATE square_control SET paused=true`;return 'https://example.com/i'}}),/changed/);assert.equal(posts,0);
+ await sql`UPDATE square_control SET paused=false`;
+ await sql`UPDATE square_drafts SET status='review',attempted_at=NULL,evidence=evidence-'manualApproval' WHERE id=${draftId}`;
+ await assert.rejects(publishApprovedDraft(approval,{...transport,publish:async()=>{posts++;throw Error('network outcome unknown')}}),/unknown/);
+ assert.equal(posts,1);assert.equal((await sql`SELECT status FROM square_drafts WHERE id=${draftId}`)[0].status,'unknown');assert.equal((await sql`SELECT paused FROM square_control`)[0].paused,true);
+ await assert.rejects(publishApprovedDraft(approval,transport));assert.equal(posts,1);
+ process.env.SQUARE_PUBLISH_ENABLED='false';
+});

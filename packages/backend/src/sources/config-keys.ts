@@ -4,7 +4,7 @@
 import type { SourceRow } from "./types.ts";
 
 // Rules applied in collect.ts to every kind read through collectSource.
-const COLLECTED = ["_aihot", "allowUrlPrefixes", "denyUrlPrefixes", "ingestNoiseFilter", "itemUrlPrefixRewrite", "sortByPublishedAt", "detail", "fetchPublicContent"];
+const COLLECTED = ["_aihot", "allowUrlPrefixes", "denyUrlPrefixes", "ingestNoiseFilter", "itemUrlPrefixRewrite", "sortByPublishedAt", "detail", "fetchPublicContent", "evidenceUrlPrefixes"];
 
 const KEYS: Record<SourceRow["kind"], string[]> = {
   rss: [...COLLECTED, "feedUrl", "summaryIsBody", "preserveUrlFragment", "allowCategories", "denyCategories"],
@@ -37,7 +37,7 @@ const NESTED: Record<string, string[]> = {
 };
 
 const VALUES: Record<string, string[]> = {
-  adapter: ["mimo_home"],
+  adapter: ["mimo_home", "telegram_channel"],
   parseMode: ["html", "markdown", "docusaurus_changelog"],
 };
 

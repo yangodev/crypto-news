@@ -286,11 +286,31 @@ async function fromMimoHome(html: string, base: string, source: SourceRow): Prom
   throw new FetchError("mimo_home: no Blog list in the homepage's chunks");
 }
 
+/** Public channel posts only; forwarded messages are not first-party announcements. */
+export function fromTelegram(html:string,base:string):Candidate[]{
+ const channel=/^https:\/\/t\.me\/s\/([a-zA-Z0-9_]+)\/?$/.exec(base)?.[1];
+ if(!channel)throw new FetchError('telegram_channel: expected a public channel URL');
+ const $=cheerio.load(html);const out:Candidate[]=[];
+ for(const node of $('.tgme_widget_message').toArray()){
+  const el=$(node),post=el.attr('data-post')??'';
+  if(!new RegExp('^'+channel+'/[0-9]+$').test(post)||el.find('.tgme_widget_message_forwarded_from,.tgme_widget_message_error').length)continue;
+  const raw=el.find('.tgme_widget_message_text').first().html();
+  const timestamp=el.find('.tgme_widget_message_date time').attr('datetime');
+  if(!raw||!timestamp||!/(Z|[+-]\d{2}:\d{2})$/.test(timestamp))continue;
+  const publishedAt=new Date(timestamp);if(!Number.isFinite(publishedAt.getTime()))continue;
+  const url='https://t.me/'+post,bodyHtml=sanitizeBody(raw,url),bodyText=stripTags(bodyHtml);
+  if(bodyText.length<30)continue;
+  out.push({url,title:collapseWhitespace(bodyText).slice(0,160),bodyHtml,bodyText,bodyStatus:'ok',publishedAt});
+ }
+ return out;
+}
+
 export async function fetchWebList(source: SourceRow): Promise<Candidate[]> {
   const { text, viaJina, base } = await fetchListingText(source);
-  const mode = source.config.adapter === "mimo_home" ? "mimo_home" : source.config.parseMode ?? (viaJina ? "markdown" : "html");
+  const mode = source.config.adapter ?? source.config.parseMode ?? (viaJina ? "markdown" : "html");
   let out: Candidate[];
   if (mode === "mimo_home") out = await fromMimoHome(text, base, source);
+  else if (mode === "telegram_channel") out = fromTelegram(text,base);
   else if (mode === "markdown") out = fromMarkdown(text, base, source);
   else if (mode === "docusaurus_changelog") out = fromDocusaurusChangelog(text, base, source);
   else out = fromHtml(text, base, source);

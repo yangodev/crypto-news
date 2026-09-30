@@ -1,4 +1,6 @@
 import { reviewAutomaticDrafts } from '@aihot/backend/square/auto';
+import { runSquareCommands } from '@aihot/backend/square/commands';
+import { tracePrimarySources } from '@aihot/backend/square/trace';
 import { shutdownSignal } from '@aihot/backend/jobs/queue';
 import { generateSquareImages } from '@aihot/backend/square/images';
 import { generateSquareDrafts } from "@aihot/backend/square/drafts";
@@ -41,6 +43,8 @@ interface Scheduled {
 const collecting = process.env.COLLECT_ENABLED !== "false";
 
 export const SCHEDULES: Scheduled[] = [
+  { name: "square.commands", cron: "* * * * *", run: runSquareCommands },
+  { name: "square.trace", cron: "* * * * *", run: () => tracePrimarySources() },
   { name: "square.images", cron: "* * * * *", run: generateSquareImages },
   { name: "square.drafts", cron: "* * * * *", run: generateSquareDrafts },
   { name: "square.review", cron: "* * * * *", run: reviewAutomaticDrafts },

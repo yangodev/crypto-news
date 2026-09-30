@@ -5,6 +5,8 @@ import { draftCover } from "@aihot/backend/square/cover";
 import { readFile } from "node:fs/promises";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { squareOverview } from "@aihot/backend/square/drafts";
+import { manualPreview } from "@aihot/backend/square/manual";
+import { requestSquareCommand } from "@aihot/backend/square/commands";
 import { audit } from "@aihot/backend/admin/auth";
 import { actorOf } from "@aihot/backend/admin/auth";
 
@@ -42,6 +44,13 @@ export function registerAdmin(app: FastifyInstance) {
     return cover ? reply.header("X-Cover-SHA256",createHash("sha256").update(cover).digest("hex")).type("image/png").send(cover) : notFound(req,reply);
   }));
   app.get("/api/admin/square", adminHandler(async () => squareOverview()));
+  app.get("/api/admin/square/:id/preview", adminHandler(async (req) => {
+    const id=Number(param(req,"id"));
+    if(!Number.isSafeInteger(id)||id<1)throw Object.assign(Error('无效稿件编号'),{statusCode:400});
+    return manualPreview(id);
+  }));
+  app.post("/api/admin/square/commands", adminHandler(async (req,_reply,admin) =>
+    requestSquareCommand(body(req),actorOf(admin),String(req.headers['idempotency-key']??''))));
   app.post("/api/admin/square/pause", adminHandler(async (_req, _reply, admin) => {
     await sql`UPDATE square_control SET paused=true,updated_at=now() WHERE id=true`;
     await audit(actorOf(admin),"square.pause","square",null,null,{paused:true});

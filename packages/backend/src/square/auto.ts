@@ -17,21 +17,24 @@ export async function loadAutomaticDraft(id:number){
  JOIN sources s ON s.id=a.source_id CROSS JOIN square_control c WHERE d.id=${id}`;
  return d;
 }
-export function automaticBlock(d:any,now=Date.now()):string|null{
- if(!d)return '稿件不存在';
- if(!d.auto_started_at||new Date(d.created_at).getTime()<new Date(d.auto_started_at).getTime())return '启用前的稿件不补发';
- if(!d.source_enabled||!d.first_party||d.tier!=='T1')return '仅自动发布已启用的一手 T1 信源';
- if(!d.selected||!d.eligible||d.visibility==='withdrawn'||d.article_revision!==d.current_revision)return '入选状态或来源版本变化';
- if(d.current_backfill||d.evidence.testOnly||d.evidence.manualSelection||d.evidence.initialImport||d.backfill_reason==='first-import')return '测试、人工选题或首次回填消息需人工处理';
- if(d.current_body_status!=='ok'||d.evidence.bodyStatus!=='ok'||d.evidence.material!==String(d.body_text??'').slice(0,18000))return '原始正文不完整或已变化';
- if(!freshness(d.source_time,now)||!freshness(d.evidence.occurredAt,now)||new Date(d.expires_at).getTime()<=now)return '来源或事件时间不在两小时内';
- if(!d.current_fact_id)return '等待事件归组与去重';
- if(d.evidence.conflict||!d.evidence.quote||!d.evidence.material.includes(d.evidence.quote))return '证据缺失或冲突';
- if(!['announced','effective','executed','confirmed_incident'].includes(d.evidence.stage))return '提案、传闻或阶段不明';
- if(digest(d.body)!==d.content_hash||!d.body.startsWith(d.title+'\n'))return '正文版本不一致';
- if(/https?:\/\/|\*\*|\]\(|我(买|卖|持有|加仓|开多|开空)|稳赚|必涨|必跌|保证收益|建议.{0,8}(买入|卖出|做多|做空)/i.test(d.body))return '正文包含链接、格式残留或交易建议';
- return null;
+export function automaticBlocks(d:any,now=Date.now()):string[]{
+ const reasons:string[]=[];
+ if(!d)return ['稿件不存在'];
+ if(!d.evidence||typeof d.evidence.material!=='string')return ['证据缺失或格式错误'];
+ if(!d.auto_started_at||new Date(d.created_at).getTime()<new Date(d.auto_started_at).getTime())reasons.push('启用前的稿件不补发');
+ if(!d.source_enabled||!d.first_party||d.tier!=='T1')reasons.push('仅自动发布已启用的一手 T1 信源');
+ if(!d.selected||!d.eligible||d.visibility==='withdrawn'||d.article_revision!==d.current_revision)reasons.push('入选状态或来源版本变化');
+ if(d.current_backfill||d.evidence.testOnly||d.evidence.manualSelection||d.evidence.initialImport||d.backfill_reason==='first-import')reasons.push('测试、人工选题或首次回填消息需人工处理');
+ if(d.current_body_status!=='ok'||d.evidence.bodyStatus!=='ok'||d.evidence.material!==String(d.body_text??'').slice(0,18000))reasons.push('原始正文不完整或已变化');
+ if(!freshness(d.source_time,now)||!freshness(d.evidence.occurredAt,now)||new Date(d.expires_at).getTime()<=now)reasons.push('来源或事件时间不在两小时内');
+ if(!d.current_fact_id)reasons.push('等待事件归组与去重');
+ if(d.evidence.conflict||!d.evidence.quote||!d.evidence.material.includes(d.evidence.quote))reasons.push('证据缺失或冲突');
+ if(!['announced','effective','executed','confirmed_incident'].includes(d.evidence.stage))reasons.push('提案、传闻或阶段不明');
+ if(digest(d.body)!==d.content_hash||!d.body.startsWith(d.title+'\n'))reasons.push('正文版本不一致');
+ if(/https?:\/\/|\*\*|\]\(|我(买|卖|持有|加仓|开多|开空)|稳赚|必涨|必跌|保证收益|建议.{0,8}(买入|卖出|做多|做空)/i.test(d.body))reasons.push('正文包含链接、格式残留或交易建议');
+ return reasons;
 }
+export function automaticBlock(d:any,now=Date.now()):string|null{return automaticBlocks(d,now)[0]??null;}
 export function automaticSnapshot(d:any,coverHash:string){
  return digest(JSON.stringify([AUTO_VERSION,d.id,d.body,d.title,d.content_hash,d.article_revision,d.current_revision,
  d.evidence.material,d.evidence.quote,d.evidence.occurredAt,d.evidence.stage,d.evidence.conflict,d.evidence.url,
@@ -54,6 +57,7 @@ export async function reviewAutomaticDrafts(){
  AND c.auto_started_at IS NOT NULL AND d.created_at>=c.auto_started_at
  AND EXISTS(SELECT 1 FROM publications p WHERE p.article_id=d.article_id AND p.fact_id IS NOT NULL)
  AND (d.review_claim_until IS NULL OR d.review_claim_until<now()) AND d.auto_review IS NULL
+ AND NOT EXISTS(SELECT 1 FROM square_commands q WHERE q.kind='publish' AND q.subject=d.id::text AND q.status IN ('queued','running'))
  ORDER BY d.created_at FOR UPDATE OF d SKIP LOCKED LIMIT 1) RETURNING id`;
  if(!candidate)return {reviewed:0};
  const id=Number(candidate.id);let snapshot:string|null=null;

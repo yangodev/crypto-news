@@ -2,6 +2,8 @@
 
 岩歌投研的加密新闻采集、筛选、网站展示与币安广场图文发布服务。此项目基于 [AIHOT](https://github.com/KKKKhazix/AIHOT) 的 `589f79e` 版本开发；下方保留上游原始说明，项目实际配置以 `industry/` 为准。
 
+后台候选稿、来源追溯、人工核验和配图诊断见 [广场运营说明](docs/square-operations.md)。
+
 ---
 
 <p align="center">

@@ -1,6 +1,6 @@
 name: yango-crypto-news
 x-backend: &backend
-  image: yango-crypto-news:${RELEASE_TAG:-20260930-20}
+  image: yango-crypto-news:${RELEASE_TAG:-20260930-21}
   env_file: .env
   restart: unless-stopped
   init: true
@@ -71,7 +71,7 @@ services:
       setup:
         condition: service_completed_successfully
   web:
-    image: yango-crypto-news:${RELEASE_TAG:-20260930-20}
+    image: yango-crypto-news:${RELEASE_TAG:-20260930-21}
     restart: unless-stopped
     init: true
     mem_limit: 384m
