@@ -16,13 +16,14 @@ async function article(date:Date|null){return (await upsertMaterial({sourceId:so
 after(async()=>{delete process.env.REALTIME_NEWS_ONLY;await stopBoss();await closeDb();});
 test('archive gate blocks already queued stale jobs without erasing materials or prior analysis',async()=>{
  process.env.REALTIME_NEWS_ONLY='true';
- const old=await article(new Date(Date.now()-3*3600000));
+ const old=await article(new Date(Date.now()-7*3600000));
  assert.deepEqual(await processArticle(old),{state:'archived'});
  assert.equal(await queueProcessing(old),null);
  const [r]=await sql`SELECT body_text,processing_state FROM articles WHERE id=${old}`;
  assert.equal(r.processing_state,'skipped');assert.ok(r.body_text);
  await sql`UPDATE articles SET processing_state='analyzed' WHERE id=${old}`;
  await archiveOutsideRealtime(old);assert.equal((await sql`SELECT processing_state FROM articles WHERE id=${old}`)[0]!.processing_state,'analyzed');
+ const withinSix=await article(new Date(Date.now()-4*3600000));assert.equal(await archiveOutsideRealtime(withinSix),false);
  const fresh=await article(new Date());assert.equal(await archiveOutsideRealtime(fresh),false);
  const unknown=await article(null);assert.equal(await archiveOutsideRealtime(unknown),true);
  await sql`UPDATE articles SET published_at=now()+interval '10 minutes' WHERE id=${fresh}`;

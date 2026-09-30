@@ -28,7 +28,7 @@ export async function requestSquareCommand(input:unknown,actor:string,key:string
  if(request.kind==='publish'){
   const approval=Approval.parse(request.payload);const preview=await manualPreview(Number(request.subject));
   if(preview.snapshot!==approval.snapshot||preview.contentHash!==approval.contentHash||preview.coverHash!==approval.coverHash)throw fail('预览已变化，请刷新后重新核验');
-  if(preview.stale&&!approval.acceptStale)throw fail('原始消息已过时，需明确确认');
+  if(preview.stale&&!approval.acceptStale)throw fail('原始消息已超过分类时效，需明确确认');
   const [c]=await sql`SELECT paused FROM square_control WHERE id=true`;
   if(process.env.SQUARE_PUBLISH_ENABLED!=='true'||c?.paused)throw fail('发布已暂停');
   payload=approval;

@@ -7,6 +7,7 @@ import {generateSquareImages} from '../../packages/backend/src/square/images.ts'
 import {generatedCover,coverKey} from '../../packages/backend/src/square/cover.ts';
 import {confirmedPublication,digest} from '../../packages/backend/src/square/policy.ts';
 import {loadAutomaticDraft} from '../../packages/backend/src/square/auto.ts';
+import {publicationConflict} from '../../packages/backend/src/square/evidence.ts';
 import {manualBlock,manualSnapshot} from '../../packages/backend/src/square/manual.ts';
 import {uploadImage,publish} from './upstream-lib.mjs';
 
@@ -24,6 +25,7 @@ export async function publishApprovedDraft({id,hash,operator,acceptStale=false,k
  const approval={operator,at:new Date().toISOString(),hash,coverHash,acceptStale};
  const claim=await sql.begin(async tx=>{
   await tx`SELECT pg_advisory_xact_lock(72819452)`;
+  if(await publicationConflict(id,tx))throw Error('Duplicate publication');
   if(enforceRuntime){
    const [c]=await tx`SELECT * FROM square_control WHERE id=true FOR UPDATE`;
    const [usage]=await tx`SELECT count(*) FILTER(WHERE attempted_at>now()-interval '1 hour') AS hour,count(*) AS day FROM square_drafts WHERE attempted_at>now()-interval '24 hours'`;
@@ -47,6 +49,7 @@ export async function publishApprovedDraft({id,hash,operator,acceptStale=false,k
    const latest=await loadAutomaticDraft(id);
    const [control]=await sql`SELECT paused FROM square_control WHERE id=true`;
    if(control.paused||process.env.SQUARE_PUBLISH_ENABLED!=='true'||manualSnapshot(latest,cover.hash)!==snapshot)throw Error('Approval changed before submission');
+   if(await publicationConflict(id))throw Error('Duplicate publication');
    const duplicates=await sql`SELECT 1 FROM square_drafts x JOIN publications xp ON xp.article_id=x.article_id WHERE x.id<>${id} AND (x.status='unknown' OR (x.status='published' AND (x.article_id=${d.article_id} OR x.event_key=${d.event_key} OR (${latest.current_fact_id??null}::bigint IS NOT NULL AND xp.fact_id=${latest.current_fact_id??null})))) LIMIT 1`;
    if(duplicates.length)throw Error('Duplicate or unknown publication');
   }

@@ -47,7 +47,7 @@ test('manual review binds all evidence, source and image changes and rejects uns
  assert.notEqual(manualSnapshot(d,'otherhash'),snap);
  assert.equal(manualSnapshot({...d,evidence:{...d.evidence,manualApproval:{operator:'admin'}}},'imagehash'),snap);
  assert.match(manualBlock({...d,source_enabled:false})!,/停用/);
- assert.match(manualBlock({...d,expires_at:new Date(0)})!,/两小时/);assert.equal(manualBlock({...d,expires_at:new Date(0)},true),null);
+ assert.match(manualBlock({...d,expires_at:new Date(0)})!,/分类时效/);assert.equal(manualBlock({...d,expires_at:new Date(0)},true),null);
 });
 
 test('traced primary pages are independent materials, preserve missing time and do not promote media',async()=>{

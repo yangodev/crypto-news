@@ -39,7 +39,7 @@ export async function tracePrimarySources(articleId?:string,fetchPage=guardedFet
  JOIN sources s ON s.id=a.source_id
  WHERE p.visibility<>'withdrawn' AND p.eligible
  AND (${articleId??null}::text IS NULL OR a.id=${articleId??null})
- AND (${articleId??null}::text IS NOT NULL OR (NOT s.first_party AND p.score>=60 AND p.published_at BETWEEN now()-interval '2 hours' AND now()))
+ AND (${articleId??null}::text IS NOT NULL OR (NOT s.first_party AND p.score>=60 AND p.published_at BETWEEN now()-interval '6 hours' AND now()))
  AND NOT EXISTS(SELECT 1 FROM square_traces t WHERE t.article_id=a.id AND t.article_revision=a.revision AND (t.status<>'running' OR t.updated_at>now()-interval '5 minutes'))
  ORDER BY p.published_at DESC LIMIT 1`;
  if(!a)return {traced:0};

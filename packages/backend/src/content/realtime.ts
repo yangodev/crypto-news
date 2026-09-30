@@ -7,7 +7,7 @@ export async function archiveOutsideRealtime(articleId:string,db:Db=sql):Promise
  const [a]=await db`SELECT published_at FROM articles WHERE id=${articleId}`;
  if(!a)return false;
  const age=a.published_at?Date.now()-new Date(a.published_at).getTime():NaN;
- if(Number.isFinite(age)&&age>=0&&age<=2*3600000)return false;
- await db`UPDATE articles SET processing_state='skipped',processing_error='仅归档：超出两小时实时窗口或来源时间未确认',processing_queued_at=NULL,processing_retry_at=NULL WHERE id=${articleId} AND processing_state='new'`;
+ if(Number.isFinite(age)&&age>=0&&age<=6*3600000)return false;
+ await db`UPDATE articles SET processing_state='skipped',processing_error='仅归档：超出六小时分析窗口或来源时间未确认',processing_queued_at=NULL,processing_retry_at=NULL WHERE id=${articleId} AND processing_state='new'`;
  return true;
 }

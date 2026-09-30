@@ -37,7 +37,7 @@ export async function squareDiagnostics(){
   sql`SELECT DISTINCT ON (job) job,status,started_at,finished_at FROM job_runs WHERE job LIKE 'square.%' ORDER BY job,started_at DESC`,
   sql`SELECT id,kind,subject,status,result,created_at,finished_at FROM square_commands ORDER BY id DESC LIMIT 20`,
   sql`SELECT id,name,health,fail_count,last_ok_at FROM sources WHERE enabled AND health IN ('degraded','failing') ORDER BY fail_count DESC LIMIT 10`,
-  sql`SELECT min(published_at) AS first_auto_published_at,count(*)::int AS automatic_published FROM square_drafts WHERE status='published' AND verified_by='square-auto-v1'`,
+  sql`SELECT min(published_at) AS first_auto_published_at,count(*)::int AS automatic_published FROM square_drafts WHERE status='published' AND verified_by IN ('square-auto-v1','square-auto-v2')`,
  ]);
  return {asOf:new Date().toISOString(),funnel,samples:samples.map(s=>({...s,threshold:SELECTION.thresholds[s.tier]??null})),jobs,commands,sources,acceptance};
 }
