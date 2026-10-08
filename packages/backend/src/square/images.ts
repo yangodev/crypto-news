@@ -31,7 +31,7 @@ export async function generateSquareImages(manualId?:number){
  let rendering=false;
  try{
   if(shutdownSignal.signal.aborted){await sql`UPDATE square_drafts SET cover_status='pending' WHERE id=${d.id} AND cover_status='generating'`;return {stopped:true};}
-  const result=await requestIllustration(String(d.id),d.title);
+  const result=await requestIllustration(String(d.id),d.title,d.revision_attempts);
   rendering=true;
   const image=Buffer.from((result.response as {image:string}).image,'base64');
   await renderCover(key+'-ai',d.title,d.evidence.sourceName,d.evidence.publishedAt,image);

@@ -10,12 +10,17 @@ import {automaticBlock,reviewAutomaticDrafts,loadAutomaticDraft} from '../packag
 import {deliverSquareDrafts} from '../packages/backend/src/square/deliver.ts';
 import {sendAutomaticDraft} from '../scripts/square/send.mjs';
 let rejectReview=false,badTitle=false,reviewHook=null;
+let revisionHook=null;
 const provider=await stub(async(_hit,req)=>{
  const parts=JSON.parse(req.body).messages[1].content;
+ if(typeof parts==='string'){
+  if(revisionHook)await revisionHook();
+  return {choices:[{message:{content:JSON.stringify({repairable:true,title:'协议完成升级',summary:'协议公告确认本次升级已经执行，具体内容以原始公告为准。'})}}]};
+ }
  assert.match(parts[1].image_url.url,/^data:image\/png;base64,/);
  const d=JSON.parse(parts[0].text);
  if(reviewHook)await reviewHook();
- return {choices:[{message:{content:JSON.stringify({factsSupported:!rejectReview,stageCorrect:true,recentEvent:true,noAdvice:true,imageMatches:true,imageClean:true,observedTitle:badTitle?'另一个标题':d.title,reason:rejectReview?'原文不能支持结论':'原文与图文一致'})}}]};
+ return {choices:[{message:{content:JSON.stringify({factsSupported:!rejectReview,stageCorrect:true,recentEvent:true,noAdvice:true,imageMatches:true,imageClean:true,observedTitle:badTitle?'另一个标题':d.title,reason:rejectReview?'原文不能支持结论':'原文与图文一致',categoryCorrect:true,announcementTimeValid:true})}}]};
 });
 Object.assign(process.env,{LLM_BASE_URL:provider.url,LLM_API_KEY:'mock',LLM_MODEL:'auto-test',SQUARE_AUTO_ENABLED:'true',SQUARE_PUBLISH_ENABLED:'true'});
 const ids=[];let source;
@@ -82,4 +87,42 @@ test('daily ceiling includes earlier attempts and unknown outcomes pause all fut
  await deliverSquareDrafts(async()=>{calls++;return {id:null}});assert.equal(calls,1);
  assert.equal((await loadAutomaticDraft(id)).status,'unknown');assert.equal((await sql`SELECT paused FROM square_control`)[0].paused,true);
  await deliverSquareDrafts(async()=>{calls++;return {}});assert.equal(calls,1);
+});
+
+test('v2 negative review is revised only once, re-reviewed independently and never extends expiry',async()=>{
+ await sql`UPDATE square_control SET paused=false`;
+ const id=await draft();const d=await loadAutomaticDraft(id);
+ await sql`UPDATE square_drafts SET evidence=${sql.json({...d.evidence,policyVersion:2,category:'other',timeBasis:'event'})} WHERE id=${id}`;
+ rejectReview=true;const hits=provider.hits();
+ await Promise.all([reviewAutomaticDrafts(),reviewAutomaticDrafts()]);
+ const revised=await loadAutomaticDraft(id);
+ assert.equal(revised.revision_attempts,1);assert.equal(revised.review_history.length,1);
+ assert.equal(revised.auto_review,null);assert.equal(revised.status,'review');
+ assert.equal(+revised.expires_at,+d.expires_at);assert.equal(provider.hits(),hits+2);
+ await reviewAutomaticDrafts();
+ const final=await loadAutomaticDraft(id);assert.equal(final.auto_review.passed,false);assert.equal(final.revision_attempts,1);
+ const end=provider.hits();await reviewAutomaticDrafts();assert.equal(provider.hits(),end);
+ rejectReview=false;await sql`UPDATE square_drafts SET status='rejected' WHERE id=${id}`;
+});
+test('corrupted text can be repaired once; changed source during correction cannot be approved',async()=>{
+ const id=await draft();const d=await loadAutomaticDraft(id);const body=d.body+'\uFFFD';
+ await sql`UPDATE square_drafts SET body=${body},content_hash=${digest(body)},evidence=${sql.json({...d.evidence,policyVersion:2,category:'other',timeBasis:'event'})} WHERE id=${id}`;
+ revisionHook=async()=>{await sql`UPDATE articles SET revision=revision+1 WHERE id=${d.article_id}`};
+ await reviewAutomaticDrafts();revisionHook=null;
+ const row=await loadAutomaticDraft(id);assert.equal(row.revision_attempts,1);assert.equal(row.auto_review.passed,false);assert.equal(row.body,body);
+ const hits=provider.hits();await reviewAutomaticDrafts();assert.equal(provider.hits(),hits);
+ await sql`UPDATE square_drafts SET status='rejected' WHERE id=${id}`;
+});
+
+test('corrected draft still needs a fresh positive verdict; expired drafts never enter repair',async()=>{
+ const id=await draft();const d=await loadAutomaticDraft(id);
+ await sql`UPDATE square_drafts SET evidence=${sql.json({...d.evidence,policyVersion:2,category:'other',timeBasis:'event'})} WHERE id=${id}`;
+ rejectReview=true;await reviewAutomaticDrafts();rejectReview=false;
+ assert.equal((await loadAutomaticDraft(id)).status,'review');
+ await reviewAutomaticDrafts();const ready=await loadAutomaticDraft(id);
+ assert.equal(ready.status,'ready');assert.equal(ready.revision_attempts,1);assert.equal(ready.auto_review.passed,true);
+ assert.notEqual(ready.auto_review.receiptId,ready.review_history[0].review.receiptId);
+ await sql`UPDATE square_drafts SET status='rejected' WHERE id=${id}`;
+ const old=await draft();await sql`UPDATE square_drafts SET expires_at=now()-interval '1 minute' WHERE id=${old}`;
+ const hits=provider.hits();await reviewAutomaticDrafts();assert.equal(provider.hits(),hits);assert.equal((await loadAutomaticDraft(old)).revision_attempts,0);
 });

@@ -24,3 +24,13 @@ test('504-style success, missing id, missing link and external links are not con
  for(const v of [null,{publishStatus:'success_without_post_id'},{id:42},{id:42,shareLink:'https://evil.example/a'},{id:'unavailable',shareLink:'https://www.binance.com/a'}])assert.equal(confirmedPublication(v),null);
  assert.deepEqual(confirmedPublication({id:'42',shareLink:'https://www.binance.com/a'}),{id:'42',url:'https://www.binance.com/a'});
 });
+
+ test('explicit event time takes priority over feed time without extending source freshness',async()=>{
+ const {draftTiming,newsTime,newsExpiry,renderDraftBody}=await import('../packages/backend/src/square/policy.ts');
+ const source='2026-10-02T11:51:08.289Z';
+ const t=draftTiming({category:'market',timeBasis:'announcement',occurredAt:'2026-10-02T08:30:00-04:00'},source);
+ assert.equal(t.timeBasis,'event');assert.equal(newsTime(t),'2026-10-02T08:30:00-04:00');
+ assert.equal(newsExpiry(source,t).toISOString(),'2026-10-02T13:51:08.289Z');
+ assert.equal(draftTiming({category:'regulation',timeBasis:'announcement',occurredAt:null},source).announcementAt,source);
+ assert.ok(!renderDraftBody('标题','内容','BLS').includes('11:51'));
+ });

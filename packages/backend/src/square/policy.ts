@@ -48,3 +48,13 @@ export function newsExpiry(publishedAt:Date|string,e:any):Date {
  const source=new Date(publishedAt).getTime(),event=Date.parse(newsTime(e)??'');
  return new Date(Math.min(source,Number.isFinite(event)?event:source)+newsHours(e)*3600000);
 }
+
+export function renderDraftBody(title:string,summary:string,source:string):string {
+ // Feed timestamps are audit metadata, not proof of the event's release time.
+ return `${title}\n\n${summary}\n\n来源：${source}`;
+}
+export function draftTiming(d:{category:string;timeBasis:string;occurredAt:string|null},announcementAt:Date|string|null){
+ const explicit=d.occurredAt&&/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(d.occurredAt)&&Number.isFinite(Date.parse(d.occurredAt));
+ const timeBasis=explicit?'event':d.timeBasis;
+ return {policyVersion:2,category:d.category,timeBasis,occurredAt:d.occurredAt,announcementAt:timeBasis==='announcement'?announcementAt:null};
+}
