@@ -11,7 +11,7 @@ import {coverKey,renderCover} from '../packages/backend/src/square/cover.ts';
 import {deliverSquareDrafts} from '../packages/backend/src/square/deliver.ts';
 import {sendAutomaticDraft} from '../scripts/square/send.mjs';
 const official='policy-official-'+tag(),media='crypto-coindesk',articleIds=[];
-let category='product',allowPrimary=true,allowCategory=true,allowAnnouncement=true;
+let category='product',allowPrimary=true,allowCategory=true,allowAnnouncement=true,copySourceTime=false;
 const provider=await stub((_hit,req)=>{
  const user=JSON.parse(req.body).messages[1].content;
  if(Array.isArray(user)){
@@ -19,7 +19,7 @@ const provider=await stub((_hit,req)=>{
   return {choices:[{message:{content:JSON.stringify({factsSupported:true,stageCorrect:true,recentEvent:true,noAdvice:true,imageMatches:true,imageClean:true,observedTitle:d.title,reason:'Verified in stub',categoryCorrect:allowCategory,announcementTimeValid:allowAnnouncement,primarySupports:allowPrimary})}}]};
  }
  const d=JSON.parse(user),p=d.primary?.[0];
- return {choices:[{message:{content:JSON.stringify({title:'协议宣布推出新产品',summary:'官方公告宣布推出新产品，具体开放安排以公告为准。',quote:'A new product is announced.',occurredAt:null,stage:'announced',conflict:false,category,timeBasis:'announcement',primaryArticleId:p?.id??null,primaryQuote:p?'A new product is announced.':null})}}]};
+ return {choices:[{message:{content:JSON.stringify({title:'协议宣布推出新产品',summary:'官方公告宣布推出新产品，具体开放安排以公告为准。',quote:'A new product is announced.',occurredAt:copySourceTime?d.publishedAt:null,stage:'announced',conflict:false,category,timeBasis:'announcement',primaryArticleId:p?.id??null,primaryQuote:p?'A new product is announced.':null})}}]};
 });
 Object.assign(process.env,{LLM_BASE_URL:provider.url,LLM_API_KEY:'mock',LLM_MODEL:'policy-test',SQUARE_AUTO_ENABLED:'true',SQUARE_PUBLISH_ENABLED:'true'});
 before(async()=>{
@@ -69,4 +69,10 @@ test('trusted media needs traced official evidence, independent approval, immuta
  await sql`UPDATE sources SET enabled=false WHERE id=${official}`;assert.equal(await loadPrimary(primaryId),null);await assert.rejects(approvedAutomaticDraft(Number(id)));await sql`UPDATE sources SET enabled=true WHERE id=${official}`;
  let posts=0;await deliverSquareDrafts(id=>sendAutomaticDraft(id,'mock',{uploadImage:async()=> 'https://example.com/image',publish:async()=>{posts++;return {id:'900123',shareLink:'https://www.binance.com/square/post/900123'}}}));assert.equal(posts,1);assert.equal((await loadAutomaticDraft(Number(id))).status,'published');
  await sql`UPDATE publications SET selected=true WHERE article_id=${primaryId}`;const duplicate=await draftFor(primaryId);assert.ok(duplicate);assert.equal(await publicationConflict(Number(duplicate)),true);await reject(duplicate);
+});
+
+test('real Geth-shaped writer output remains an announcement through persistence and review',async()=>{
+ copySourceTime=true;const id=await draftFor(await article(official,1));copySourceTime=false;
+ const d=await loadAutomaticDraft(Number(id));assert.equal(d.evidence.timeBasis,'announcement');assert.equal(d.evidence.occurredAt,null);assert.ok(d.evidence.announcementAt);
+ await cover(id);await reviewAutomaticDrafts();assert.equal((await loadAutomaticDraft(Number(id))).status,'ready');await reject(id);
 });

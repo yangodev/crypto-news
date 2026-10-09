@@ -28,9 +28,16 @@ test('504-style success, missing id, missing link and external links are not con
  test('explicit event time takes priority over feed time without extending source freshness',async()=>{
  const {draftTiming,newsTime,newsExpiry,renderDraftBody}=await import('../packages/backend/src/square/policy.ts');
  const source='2026-10-02T11:51:08.289Z';
- const t=draftTiming({category:'market',timeBasis:'announcement',occurredAt:'2026-10-02T08:30:00-04:00'},source);
+ const t=draftTiming({category:'market',timeBasis:'event',occurredAt:'2026-10-02T08:30:00-04:00'},source);
  assert.equal(t.timeBasis,'event');assert.equal(newsTime(t),'2026-10-02T08:30:00-04:00');
  assert.equal(newsExpiry(source,t).toISOString(),'2026-10-02T13:51:08.289Z');
  assert.equal(draftTiming({category:'regulation',timeBasis:'announcement',occurredAt:null},source).announcementAt,source);
  assert.ok(!renderDraftBody('标题','内容','BLS').includes('11:51'));
  });
+
+test('Geth announcement cannot become an event merely because the writer copied a timestamp',async()=>{
+ const {draftTiming}=await import('../packages/backend/src/square/policy.ts');
+ const time='2026-10-08T16:35:36.000Z';
+ const t=draftTiming({category:'other',timeBasis:'announcement',occurredAt:time},time);
+ assert.equal(t.timeBasis,'announcement');assert.equal(t.occurredAt,null);assert.equal(t.announcementAt,time);
+});

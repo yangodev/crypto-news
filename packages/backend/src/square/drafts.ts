@@ -1,3 +1,4 @@
+import {researchOverview} from './research.ts';
 import { shutdownSignal } from '../jobs/queue.ts';
 import { z } from 'zod';
 import { sql } from '../db.ts';
@@ -41,7 +42,7 @@ export async function generateSquareDrafts(manual?: {articleId:string;requestedB
   if(row.body_status!=='ok')reasons.push('正文未完整获取，依据摘要起草，需补充原始证据');
   const url=sourceUrl(row.url);
   const body=renderDraftBody(d.title,d.summary,row.source_name);
-  const evidence={...timing,...(chosen?{primary:{articleId:chosen.id,fingerprint:chosen.fingerprint,quote:d.primaryQuote}}:{}),...(manual?{manualSelection:{requestedBy:manual.requestedBy,requestedAt:new Date().toISOString()}}:{}),initialImport:row.backfill_reason==='first-import',bodyStatus:row.body_status,sourceName:row.source_name,url,publishedAt:row.published_at,occurredAt:d.occurredAt,quote:d.quote,stage:d.stage,conflict:d.conflict,material,receiptId:result.receiptId,factId:row.fact_id};
+  const evidence={...timing,...(chosen?{primary:{articleId:chosen.id,fingerprint:chosen.fingerprint,quote:d.primaryQuote}}:{}),...(manual?{manualSelection:{requestedBy:manual.requestedBy,requestedAt:new Date().toISOString()}}:{}),initialImport:row.backfill_reason==='first-import',bodyStatus:row.body_status,sourceName:row.source_name,url,publishedAt:row.published_at,quote:d.quote,stage:d.stage,conflict:d.conflict,material,receiptId:result.receiptId,factId:row.fact_id};
   const inserted=await sql`INSERT INTO square_drafts(event_key,article_id,article_revision,title,body,content_hash,evidence,review_reasons,expires_at,status)
   VALUES(${eventKey(row.fact_id,url)},${row.article_id},${row.revision},${d.title},${body},${digest(body)},${sql.json(evidence)},${reasons},${expiresAt},${!manual&&expiresAt.getTime()<=Date.now()?'expired':'review'}) ON CONFLICT DO NOTHING RETURNING id`;
   await completeReceipt(sql, result.receiptId);
@@ -62,6 +63,6 @@ export async function squareOverview() {
  ORDER BY d.created_at DESC LIMIT 100`;
  for(const row of rows)if(row.evidence.primary?.articleId)row.primary_live=await loadPrimary(row.evidence.primary.articleId);
  const diagnostics=await squareDiagnostics();
- return {autoEnabled:process.env.SQUARE_AUTO_ENABLED==='true',hourlyLimit:control?.hourly_limit??1,dailyLimit:control?.daily_limit??5,autoStartedAt:control?.auto_started_at??null,imageEnabled:config.modelCallsEnabled&&process.env.SQUARE_IMAGE_ENABLED==='true',publishEnabled:process.env.SQUARE_PUBLISH_ENABLED==='true',paused:control?.paused??true,modelEnabled:config.modelCallsEnabled,
+ return {research:await researchOverview(),researchEnabled:process.env.SQUARE_RESEARCH_ENABLED==='true',autoEnabled:process.env.SQUARE_AUTO_ENABLED==='true',hourlyLimit:control?.hourly_limit??1,dailyLimit:control?.daily_limit??5,autoStartedAt:control?.auto_started_at??null,imageEnabled:config.modelCallsEnabled&&process.env.SQUARE_IMAGE_ENABLED==='true',publishEnabled:process.env.SQUARE_PUBLISH_ENABLED==='true',paused:control?.paused??true,modelEnabled:config.modelCallsEnabled,
  rows:rows.map(d=>{const {body_text,primary_live,...row}=d;return {...row,blockingReasons:draftBlockers(d)};}),diagnostics};
 }

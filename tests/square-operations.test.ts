@@ -67,3 +67,17 @@ test('traced primary pages are independent materials, preserve missing time and 
  assert.deepEqual(await tracePrimarySources(id,async()=>{throw Error('must not repeat')}),{traced:0});
  const [trace]=await sql`SELECT links FROM square_traces WHERE article_id=${id}`;assert.match(trace.links[0].reason,/无精确发布时间/);
 });
+
+test('media without an official link can discover a stored official lead but is never auto-selected',async()=>{
+ const {sql}=await import('../packages/backend/src/db.ts');const {upsertMaterial}=await import('../packages/backend/src/content/materials.ts');
+ const key='pool-'+Date.now(),media=key+'-media',official=key+'-official';
+ await sql`INSERT INTO sources(id,name,kind,tier,first_party,config) VALUES(${media},'Media','rss','T2',false,'{}'),(${official},'Official','rss','T1',true,${sql.json({evidenceUrlPrefixes:['https://official.example/'+key]})})`;
+ const p=await upsertMaterial({sourceId:official,url:'https://official.example/'+key+'/release',title:'ExampleProtocol releases Neptune',bodyText:'ExampleProtocol announces Neptune protocol upgrade.',bodyStatus:'ok',publishedAt:new Date(),via:'fetch'});
+ const a=await upsertMaterial({sourceId:media,url:'https://media.example/'+key,title:'ExampleProtocol Neptune update',bodyHtml:'<p>No outbound links</p>',bodyText:'ExampleProtocol has released Neptune.',bodyStatus:'ok',publishedAt:new Date(),via:'fetch'});
+ await sql`INSERT INTO publications(article_id,eligible,selected,title,summary,source_id,channel,first_party,url,published_at,discovered_at,timeline_at,sort_at) VALUES(${a.articleId},true,false,'News','News',${media},'news',false,${'https://media.example/'+key},now(),now(),now(),now())`;
+ const out=await tracePrimarySources(a.articleId,async()=>{throw Error('No link should be fetched')});assert.equal(out.collected,1);
+ const [t]=await sql`SELECT links FROM square_traces WHERE article_id=${a.articleId}`;assert.equal(t.links[0].articleId,p.articleId);assert.match(t.links[0].reason,/尚需独立审核/);
+ await sql`UPDATE square_traces SET links=${sql.json([...Array.from({length:5},()=>({status:'unconfirmed'})),...t.links])} WHERE article_id=${a.articleId}`;
+ const {primaryCandidates}=await import('../packages/backend/src/square/evidence.ts');assert.equal((await primaryCandidates(a.articleId))[0]?.id,p.articleId);
+ assert.equal((await sql`SELECT selected FROM publications WHERE article_id=${a.articleId}`)[0]!.selected,false);
+});

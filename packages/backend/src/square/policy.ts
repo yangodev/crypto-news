@@ -54,7 +54,7 @@ export function renderDraftBody(title:string,summary:string,source:string):strin
  return `${title}\n\n${summary}\n\n来源：${source}`;
 }
 export function draftTiming(d:{category:string;timeBasis:string;occurredAt:string|null},announcementAt:Date|string|null){
- const explicit=d.occurredAt&&/^\d{4}-\d{2}-\d{2}T.*(Z|[+-]\d{2}:?\d{2})$/.test(d.occurredAt)&&Number.isFinite(Date.parse(d.occurredAt));
- const timeBasis=explicit?'event':d.timeBasis;
- return {policyVersion:2,category:d.category,timeBasis,occurredAt:d.occurredAt,announcementAt:timeBasis==='announcement'?announcementAt:null};
+ // A timestamp's syntax does not prove that it came from the event's original text.
+ const timeBasis=d.timeBasis;
+ return {policyVersion:2,category:d.category,timeBasis,occurredAt:timeBasis==='announcement'?null:d.occurredAt,announcementAt:timeBasis==='announcement'?announcementAt:null};
 }

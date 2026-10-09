@@ -10,12 +10,12 @@ import {automaticBlock,reviewAutomaticDrafts,loadAutomaticDraft} from '../packag
 import {deliverSquareDrafts} from '../packages/backend/src/square/deliver.ts';
 import {sendAutomaticDraft} from '../scripts/square/send.mjs';
 let rejectReview=false,badTitle=false,reviewHook=null;
-let revisionHook=null;
+let revisionHook=null,repairTime=false;
 const provider=await stub(async(_hit,req)=>{
  const parts=JSON.parse(req.body).messages[1].content;
  if(typeof parts==='string'){
   if(revisionHook)await revisionHook();
-  return {choices:[{message:{content:JSON.stringify({repairable:true,title:'协议完成升级',summary:'协议公告确认本次升级已经执行，具体内容以原始公告为准。'})}}]};
+  return {choices:[{message:{content:JSON.stringify({repairable:true,...(repairTime?{timeBasis:'announcement',occurredAt:null}:{}),title:'协议完成升级',summary:'协议公告确认本次升级已经执行，具体内容以原始公告为准。'})}}]};
  }
  assert.match(parts[1].image_url.url,/^data:image\/png;base64,/);
  const d=JSON.parse(parts[0].text);
@@ -125,4 +125,12 @@ test('corrected draft still needs a fresh positive verdict; expired drafts never
  await sql`UPDATE square_drafts SET status='rejected' WHERE id=${id}`;
  const old=await draft();await sql`UPDATE square_drafts SET expires_at=now()-interval '1 minute' WHERE id=${old}`;
  const hits=provider.hits();await reviewAutomaticDrafts();assert.equal(provider.hits(),hits);assert.equal((await loadAutomaticDraft(old)).revision_attempts,0);
+});
+
+test('one correction can repair a mistaken event basis using official announcement time without renewing expiry',async()=>{
+ const id=await draft();const d=await loadAutomaticDraft(id);
+ await sql`UPDATE square_drafts SET evidence=${sql.json({...d.evidence,policyVersion:2,category:'other',timeBasis:'event',stage:'announced'})} WHERE id=${id}`;
+ rejectReview=true;repairTime=true;await reviewAutomaticDrafts();rejectReview=false;repairTime=false;
+ const fixed=await loadAutomaticDraft(id);assert.equal(fixed.evidence.timeBasis,'announcement');assert.equal(fixed.evidence.occurredAt,null);assert.equal(+fixed.expires_at,+d.expires_at);assert.equal(fixed.revision_attempts,1);
+ await reviewAutomaticDrafts();assert.equal((await loadAutomaticDraft(id)).status,'ready');await sql`UPDATE square_drafts SET status='rejected' WHERE id=${id}`;
 });

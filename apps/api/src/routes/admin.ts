@@ -1,3 +1,4 @@
+import {editResearch,addResearch} from '@aihot/backend/square/research';
 import { createHash } from "node:crypto";
 import { draftCover } from "@aihot/backend/square/cover";
 // /api/admin/*: queries are GET, creation POST, edits PATCH, business commands POST.
@@ -43,6 +44,8 @@ export function registerAdmin(app: FastifyInstance) {
     const cover=await draftCover(Number(param(req,"id")));
     return cover ? reply.header("X-Cover-SHA256",createHash("sha256").update(cover).digest("hex")).type("image/png").send(cover) : notFound(req,reply);
   }));
+  app.post('/api/admin/square/research',adminHandler(async(req,_reply,admin)=>addResearch(body(req),actorOf(admin),String(req.headers['idempotency-key']??''))));
+  app.patch('/api/admin/square/research/:id',adminHandler(async(req,_reply,admin)=>editResearch(Number(param(req,'id')),body(req),actorOf(admin))));
   app.get("/api/admin/square", adminHandler(async () => squareOverview()));
   app.get("/api/admin/square/:id/preview", adminHandler(async (req) => {
     const id=Number(param(req,"id"));

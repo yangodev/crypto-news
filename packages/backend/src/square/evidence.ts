@@ -14,7 +14,7 @@ export async function loadPrimary(id:string){
 export async function primaryCandidates(articleId:string){
  const [trace]=await sql`SELECT t.links FROM square_traces t JOIN articles a ON a.id=t.article_id AND a.revision=t.article_revision WHERE a.id=${articleId} AND t.status='done'`;
  const out=[];
- for(const link of (trace?.links??[]).slice(0,5)){
+ for(const link of (trace?.links??[]).filter((l:any)=>l.status==='collected'&&l.articleId&&l.articleId!==articleId).slice(0,5)){
   if(link.status!=='collected'||!link.articleId||link.articleId===articleId)continue;
   const p=await loadPrimary(link.articleId);if(p)out.push(p);
  }

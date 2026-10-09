@@ -13,6 +13,8 @@ const source='operations-'+tag();let draftId;
 after(async()=>{await sql`DELETE FROM square_commands WHERE actor='operations-test'`;if(draftId)await sql`DELETE FROM square_drafts WHERE id=${draftId}`;await sql`UPDATE square_control SET paused=true`;await closeDb();});
 test('private preview and commands require admin authentication',async()=>{
  const app=await buildApp();try{
+  for(const method of ['POST','PATCH']){const r=await app.inject({method,url:method==='POST'?'/api/admin/square/research':'/api/admin/square/research/1',payload:{}});assert.equal(r.statusCode,401);}
+
  assert.equal((await app.inject({method:'GET',url:'/api/admin/square/1/preview'})).statusCode,401);
  assert.equal((await app.inject({method:'POST',url:'/api/admin/square/commands',payload:{kind:'publish',subject:'1'}})).statusCode,401);
  }finally{await app.close();}

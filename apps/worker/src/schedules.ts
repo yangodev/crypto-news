@@ -1,3 +1,4 @@
+import {prepareDailyResearch} from '@aihot/backend/square/research';
 import { reviewAutomaticDrafts } from '@aihot/backend/square/auto';
 import { runSquareCommands } from '@aihot/backend/square/commands';
 import { tracePrimarySources } from '@aihot/backend/square/trace';
@@ -43,6 +44,7 @@ interface Scheduled {
 const collecting = process.env.COLLECT_ENABLED !== "false";
 
 export const SCHEDULES: Scheduled[] = [
+  { name: 'square.research', cron: '0 9 * * *', missed: 'once', run: prepareDailyResearch },
   { name: "square.commands", cron: "* * * * *", run: runSquareCommands },
   { name: "square.trace", cron: "* * * * *", run: () => tracePrimarySources() },
   { name: "square.images", cron: "* * * * *", run: generateSquareImages },

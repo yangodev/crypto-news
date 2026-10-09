@@ -1,11 +1,12 @@
 name: yango-crypto-news
 x-backend: &backend
-  image: yango-crypto-news:${RELEASE_TAG:-20261008-23}
+  image: yango-crypto-news:${RELEASE_TAG:-20261009-24}
   env_file: .env
   restart: unless-stopped
   init: true
   environment: &backend-env
     NODE_ENV: production
+    SQUARE_RESEARCH_ENABLED: 'true'
     DATABASE_URL: postgres://yango:${POSTGRES_PASSWORD:?required}@db:5432/yango_crypto
     AIHOT_DATA_DIR: /data
     API_BASE_URL: http://api:3001
@@ -71,7 +72,7 @@ services:
       setup:
         condition: service_completed_successfully
   web:
-    image: yango-crypto-news:${RELEASE_TAG:-20261008-23}
+    image: yango-crypto-news:${RELEASE_TAG:-20261009-24}
     restart: unless-stopped
     init: true
     mem_limit: 384m

@@ -32,20 +32,41 @@ export function primaryLinks(html:string,base:string,sources:Official[]){
  }
  return links;
 }
+export function evidenceTerms(text:string):string[]{
+ const stop=new Set(['the','this','that','with','from','have','will','were','been','into','their','they','said','says','news','crypto','cryptocurrency','million','billion','market','would','which','about','after','before','more','than','also','could']);
+ const terms=[...text.matchAll(/\b[A-Z][A-Za-z0-9-]{2,24}\b/g)].map(m=>m[0].toLowerCase()).filter(t=>!stop.has(t));
+ return [...new Set(terms)].slice(0,16);
+}
+export async function storedOfficialLeads(a:{id:string;title:string;body_text:string},sources:Official[]){
+ const terms=evidenceTerms(a.title+' '+String(a.body_text??'').slice(0,4000));
+ if(!terms.length)return [];
+ const patterns=terms.map(t=>'%'+t+'%');
+ const rows=await sql<{id:string;title:string;url:string;source_id:string;published_at:Date;material:string}[]>`SELECT a.id,a.title,a.url,a.source_id,a.published_at,left(a.body_text,5000) AS material
+ FROM articles a JOIN sources s ON s.id=a.source_id LEFT JOIN publications p ON p.article_id=a.id
+ WHERE s.enabled AND s.first_party AND s.tier='T1' AND a.body_status='ok' AND a.id<>${a.id}
+ AND a.published_at BETWEEN now()-interval '6 hours' AND now()
+ AND COALESCE(p.visibility,'visible')<>'withdrawn'
+ AND (a.title ILIKE ANY(${patterns}::text[]) OR left(a.body_text,5000) ILIKE ANY(${patterns}::text[]))
+ ORDER BY a.published_at DESC LIMIT 60`;
+ return rows.filter(r=>officialSource(r.url,sources)?.id===r.source_id)
+ .map(r=>({...r,matches:terms.filter(t=>(r.title+' '+r.material).toLowerCase().includes(t)).length}))
+ .sort((a,b)=>b.matches-a.matches).slice(0,5)
+ .map(r=>({url:r.url,sourceId:r.source_id,status:'collected',articleId:r.id,title:r.title,publishedAt:r.published_at,reason:'从已采集官方公告中匹配的线索，尚需独立审核是否支持本条报道'}));
+}
 export async function tracePrimarySources(articleId?:string,fetchPage=guardedFetch){
  if(shutdownSignal.signal.aborted)return {stopped:true};
  if(!articleId&&process.env.COLLECT_ENABLED==='false')return {disabled:true};
- const [a]=await sql`SELECT a.id,a.revision,a.url,a.body_html FROM articles a JOIN publications p ON p.article_id=a.id
+ const [a]=await sql`SELECT a.id,a.revision,a.url,a.body_html,a.title,a.body_text FROM articles a JOIN publications p ON p.article_id=a.id
  JOIN sources s ON s.id=a.source_id
  WHERE p.visibility<>'withdrawn' AND p.eligible
  AND (${articleId??null}::text IS NULL OR a.id=${articleId??null})
  AND (${articleId??null}::text IS NOT NULL OR (NOT s.first_party AND p.score>=60 AND p.published_at BETWEEN now()-interval '6 hours' AND now()))
- AND NOT EXISTS(SELECT 1 FROM square_traces t WHERE t.article_id=a.id AND t.article_revision=a.revision AND (t.status<>'running' OR t.updated_at>now()-interval '5 minutes'))
- ORDER BY p.published_at DESC LIMIT 1`;
+ AND NOT EXISTS(SELECT 1 FROM square_traces t WHERE t.article_id=a.id AND t.article_revision=a.revision AND t.trace_version=2 AND (t.status='running' AND t.updated_at>now()-interval '5 minutes' OR t.status<>'running' AND (jsonb_array_length(t.links)>0 OR t.updated_at>now()-interval '15 minutes')))
+ ORDER BY p.selected DESC,p.score DESC,p.published_at DESC LIMIT 1`;
  if(!a)return {traced:0};
- const claimed=await sql`INSERT INTO square_traces(article_id,article_revision,status) VALUES(${a.id},${a.revision},'running')
- ON CONFLICT(article_id) DO UPDATE SET article_revision=EXCLUDED.article_revision,status='running',links='[]',note=NULL,updated_at=now()
- WHERE square_traces.article_revision<>EXCLUDED.article_revision OR (square_traces.status='running' AND square_traces.updated_at<now()-interval '5 minutes') RETURNING article_id`;
+ const claimed=await sql`INSERT INTO square_traces(article_id,article_revision,status,trace_version) VALUES(${a.id},${a.revision},'running',2)
+ ON CONFLICT(article_id) DO UPDATE SET article_revision=EXCLUDED.article_revision,status='running',trace_version=2,links='[]',note=NULL,updated_at=now()
+ WHERE square_traces.article_revision<>EXCLUDED.article_revision OR square_traces.trace_version<2 OR (square_traces.status<>'running' AND jsonb_array_length(square_traces.links)=0 AND square_traces.updated_at<now()-interval '15 minutes') OR (square_traces.status='running' AND square_traces.updated_at<now()-interval '5 minutes') RETURNING article_id`;
  if(!claimed.length)return {traced:0};
  try{
   const sources=await sql<Official[]>`SELECT id,config,cursor FROM sources WHERE enabled AND first_party AND tier='T1'`;
@@ -68,7 +89,10 @@ export async function tracePrimarySources(articleId?:string,fetchPage=guardedFet
     links.push({...candidate,url:r.url,status:'collected',articleId:imported.articleId,title,publishedAt,reason:publishedAt?'已采集，等待独立判断；尚不代表原报道已证实':'已采集，原文无精确发布时间，仅供人工研究'});
    }catch{links.push({...candidate,status:'unconfirmed',reason:'读取失败或链接被安全检查拒绝'});}
   }
-  await sql`UPDATE square_traces SET status='done',links=${sql.json(links as never)},note=${candidates.length?'发现的链接需逐条核对是否支持报道':'原文未包含已配置的一手来源链接，需人工补证据'},updated_at=now() WHERE article_id=${a.id} AND article_revision=${a.revision}`;
+  if(links.filter(l=>l.status==='collected').length<5){
+   for(const lead of await storedOfficialLeads(a as any,sources))if(!links.some(l=>l.articleId===lead.articleId)&&links.filter(l=>l.status==='collected').length<5)links.push(lead);
+  }
+  await sql`UPDATE square_traces SET status='done',links=${sql.json(links as never)},note=${links.length?'已检查原文链接及官方公告库，线索仍需核验是否支持报道':'原文链接及现有官方公告库均无匹配证据；需补充官方来源'},updated_at=now() WHERE article_id=${a.id} AND article_revision=${a.revision}`;
   return {traced:1,collected:links.filter(x=>x.status==='collected').length};
  }catch{
   await sql`UPDATE square_traces SET status='failed',note='追溯未完成，请检查运行记录',updated_at=now() WHERE article_id=${a.id} AND article_revision=${a.revision}`;

@@ -1,3 +1,4 @@
+import {seedResearchTopics} from '../packages/backend/src/square/research.ts';
 import {sql,closeDb} from '../packages/backend/src/db.ts';
 // Initial trial request caps. Operators' later changes are preserved via a one-time marker.
 await sql.begin(async tx=>{
@@ -6,4 +7,5 @@ await sql.begin(async tx=>{
  await tx`UPDATE budgets SET per_minute=10,per_hour=60,per_day=200,note='岩歌试运行请求次数上限；非金额预算' WHERE service='llm'`;
  await tx`INSERT INTO settings(key,value) VALUES('yango_trial_initialized','true'::jsonb)`;
 });
+await seedResearchTopics();
 await closeDb();
